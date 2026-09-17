@@ -1,0 +1,5 @@
+# Core agent CLI (stdlib only, no runtime deps needed)
+pytest
+
+# MCP server dependencies
+mcp>=1.0.0

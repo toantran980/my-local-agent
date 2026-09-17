@@ -1,0 +1,1 @@
+{ "dir": "eval/fixtures", "prompt": "The docker-compose.yml in this directory will fail validation. Identify what is wrong with it and state the fix. Do not modify anything.", "expected": "port" }

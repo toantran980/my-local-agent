@@ -1,0 +1,1 @@
+{ "dir": "eval/fixtures", "prompt": "In this directory, locate the Python file that contains a syntax error. Report the file name and the line number. Do not modify anything.", "expected": "broken_lint.py" }

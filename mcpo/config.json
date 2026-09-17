@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "mcp-server-filesystem",
+      "args": ["/workspace"]
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "local_ops": {
+      "command": "python",
+      "args": ["/opt/mcp/local_ops.py"],
+      "env": {
+        "REPO_DIR": "/repo",
+        "REPORTS_DIR": "/data/agent-reports",
+        "EVAL_FILE": "/data/eval/history.jsonl",
+        "WORKSPACE": "/workspace",
+        "OLLAMA_URL": "http://ollama:11434"
+      }
+    },
+    "projects_ops": {
+      "command": "python",
+      "args": ["/opt/mcp/projects_ops.py"],
+      "env": {
+        "PROJECTS_DIR": "/projects",
+        "CONFIGS_DIR": "/configs",
+        "MAX_FILE_BYTES": "32000",
+        "MAX_RESULTS": "50"
+      }
+    }
+  }
+}

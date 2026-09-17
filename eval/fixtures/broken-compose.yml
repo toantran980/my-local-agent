@@ -1,0 +1,5 @@
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "65536:80"   # <- invalid: port 65536 out of range (max 65535)

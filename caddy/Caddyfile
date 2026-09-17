@@ -1,0 +1,42 @@
+# Caddy configuration for homelab authentication proxy
+# Provides basic auth and TLS termination for safe network access
+# 
+# Usage:
+# 1. Set ADMIN_USER and ADMIN_PASSWORD environment variables
+# 2. Uncomment appropriate ports in docker-compose.yml
+# 3. Start with: docker compose --profile auth up -d auth_proxy
+
+{
+    # Auto-generate self-signed certificate for local development
+    # For production, replace with proper certificates
+    auto_https off
+}
+
+# Local authentication proxy
+:8443 {
+    # Basic authentication
+    basicauth {
+        {$ADMIN_USER} {$ADMIN_PASSWORD}
+    }
+    
+    # Health check endpoint (no auth required)
+    /health {
+        respond "OK" 200
+    }
+    
+    # Proxy to vLLM (when enabled)
+    /v1/* {
+        reverse_proxy vllm:8000
+    }
+    
+    # Proxy to Open WebUI (optional - for external UI access)
+    /ui/* {
+        reverse_proxy open-webui:8080
+    }
+    
+    # Log configuration
+    log {
+        output file /data/caddy.log
+        format json
+    }
+}

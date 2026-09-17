@@ -1,0 +1,1 @@
+{ "dir": "eval/fixtures", "prompt": "This directory has a pytest file containing a failing test. Name the failing test and explain why it fails in one sentence. Do not modify anything.", "expected": "frobnicate" }

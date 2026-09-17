@@ -1,0 +1,35 @@
+# Python environments and caches
+.venv/
+.agent-venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*$py.class
+
+# Local runtime output
+logs/*
+reports/*
+agent-reports/*
+.agent/audit/
+.agent/plans/
+debug.log
+workspace/*
+!workspace/README.md
+
+# Local runtime output
+logs/*
+reports/*
+agent-reports/*
+.agent/audit/
+.agent/plans/
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
