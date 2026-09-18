@@ -54,9 +54,9 @@ jobs:
         run: |
           pip install ruff
 
-      - name: Start full stack with docker-compose
+      - name: Start full stack with docker-compose (CPU mode)
         run: |
-          docker compose up -d --build
+          docker compose -f docker-compose.ci.yml up -d --build
           # Wait for all services to be ready
           for i in {1..60}; do
             if curl -sf http://localhost:11434/api/tags >/dev/null && \
@@ -87,7 +87,7 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.ci.yml down -v
 
   eval:
     name: Evaluation Suite
@@ -108,9 +108,9 @@ jobs:
             ~/.ollama
           key: ollama-${{ runner.os }}-${{ hashFiles('docker-compose.yml') }}
 
-      - name: Start services with docker-compose
+      - name: Start services with docker-compose (CPU mode)
         run: |
-          docker compose up -d
+          docker compose -f docker-compose.ci.yml up -d
           # Wait for Ollama API
           for i in {1..30}; do
             if curl -sf http://localhost:11434/api/tags >/dev/null; then
@@ -145,4 +145,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.ci.yml down -v
