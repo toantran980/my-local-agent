@@ -74,13 +74,13 @@ jobs:
           bash ../scripts/run-eval.sh qwen3:8b
           python3 ../scripts/eval-summary.py
 
-      - name: Check eval pass rate
+- name: Check eval pass rate
         run: |
           python3 -c "
-import json
-with open('eval/history.jsonl') as f:
-    last = json.loads(list(f)[-1])
-    rate = last['passed'] / last['total']
-    assert rate >= 1.0, f'Eval pass rate {rate:.0%} < 100%'
-    print(f'Eval: {last[\"passed\"]}/{last[\"total\"]} passed ({rate:.0%})')
-"
+          import json
+          with open('eval/history.jsonl') as f:
+              last = json.loads(list(f)[-1])
+              rate = last['passed'] / last['total']
+              assert rate >= 1.0, 'Eval pass rate {:.0%} < 100%'.format(rate)
+              print('Eval: {}/{} passed ({:.0%})'.format(last['passed'], last['total'], rate))
+          "
