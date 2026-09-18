@@ -23,7 +23,6 @@ import argparse
 import datetime as dt
 import json
 import os
-import re
 import subprocess
 import sys
 import urllib.error
@@ -134,10 +133,14 @@ def _get(path, timeout=180):
 def run_tool(name, args):
     try:
         if name == "git_status":
-            st = subprocess.run(["git", "-C", str(ROOT), "status", "--short"],
-                                capture_output=True, text=True, timeout=30).stdout
-            log = subprocess.run(["git", "-C", str(ROOT), "log", "--oneline", "-8"],
-                                 capture_output=True, text=True, timeout=30).stdout
+            st = subprocess.run(
+                ["git", "-C", str(ROOT), "status", "--short"],
+                capture_output=True, text=True, timeout=30, check=False
+            ).stdout
+            log = subprocess.run(
+                ["git", "-C", str(ROOT), "log", "--oneline", "-8"],
+                capture_output=True, text=True, timeout=30, check=False
+            ).stdout
             return f"STATUS:\n{st or '(clean)'}\nLOG:\n{log or '(no commits yet)'}"
         if name == "read_file":
             p = (ROOT / str(args.get("path", ""))).resolve()
@@ -151,7 +154,7 @@ def run_tool(name, args):
             cmd = ["grep", "-rnI", pat, str(ROOT)]
             if gl:
                 cmd += ["--include", gl]
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=30).stdout
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False).stdout
             return out[:6000] or "(no matches)"
         if name == "gpu_status":
             d = _get("/api/ps")
@@ -170,7 +173,7 @@ def run_tool(name, args):
                              for m in d.get("models", [])) or "(none)"
         if name == "write_report":
             md = args.get("markdown", "")
-            day = dt.date.today().isoformat()
+            day = dt.datetime.now(dt.UTC).date().isoformat()
             out = ROOT / "reports" / f"{day}.md"
             out.parent.mkdir(exist_ok=True)
             out.write_text(md + "\n", encoding="utf-8")
@@ -180,16 +183,45 @@ def run_tool(name, args):
                 tag = "chore: nightly triage report " + day
                 body_file = ROOT / "reports" / f"{day}.pr.md"
                 body_file.write_text(md + "\n", encoding="utf-8")
-                subprocess.run([
-                    "gh", "pr", "create", "--draft", "-R", os.environ["GH_REPO"],
-                    "-t", tag, "-F", str(body_file),
-                ], capture_output=True, text=True, timeout=30)
+                subprocess.run(
+                    [
+                        "gh", "pr", "create", "--draft", "-R", os.environ["GH_REPO"],
+                        "-t", tag, "-F", str(body_file),
+                    ], capture_output=True, text=True, timeout=30, check=False
+                )
             return f"wrote {out.relative_to(ROOT)} ({len(md)} chars)"
         return f"unknown tool: {name}"
     except subprocess.TimeoutExpired:
         return f"TOOL-ERROR {name}: command timed out"
-    except Exception as e:
+    except BaseException as e:  # noqa: BLE001
         return f"TOOL-ERROR {name}: {e}"
+
+
+def _urlopen(req, timeout=180):
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read()
+            return json.loads(raw)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")
+        if e.code == 400 and not body:
+            return {"choices": [{"message": {"content": "", "tool_calls": None}}]}
+        raise
+
+
+def _post(path, payload, timeout=180):
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{OLLAMA_URL}{path}",
+        data=body,
+        headers={"Content-Type": "application/json"},
+    )
+    return _urlopen(req, timeout)
+
+
+def _get(path, timeout=180):
+    req = urllib.request.Request(f"{OLLAMA_URL}{path}")
+    return _urlopen(req, timeout)
 
 
 def complete(messages):
@@ -256,17 +288,17 @@ def main():
         else:
             # if the model bailed without write_report, still persist a report
             if not report_written:
-                p = ROOT / "reports" / f"{dt.date.today().isoformat()}-fallback.md"
+                p = ROOT / "reports" / f"{dt.datetime.now(dt.UTC).date().isoformat()}-fallback.md"
                 p.parent.mkdir(exist_ok=True)
                 p.write_text(msg.get("content", "") + "\n", encoding="utf-8")
                 print(f"fallback report -> {p.relative_to(ROOT)}")
             else:
-                today = dt.date.today().isoformat()
+                today = dt.datetime.now(dt.UTC).date().isoformat()
                 f = ROOT / "reports" / f"{today}.md"
                 if f.exists():
                     print(f"report -> {f.relative_to(ROOT)}")
             return 0
-    print("no final answer in loop budget; report_written=%s" % report_written)
+    print(f"no final answer in loop budget; report_written={report_written}")
     return 0 if report_written else 2
 
 

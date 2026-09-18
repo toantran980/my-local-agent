@@ -23,7 +23,7 @@ for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         continue
     try:
         r = json.loads(line)
-    except Exception:
+    except BaseException:  # noqa: BLE001
         print("  !! unparseable line")
         continue
     tool = r.get("tool") or r.get("name") or "?"

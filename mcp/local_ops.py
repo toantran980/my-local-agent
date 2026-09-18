@@ -36,13 +36,13 @@ def _env(key, default):
 
 def _run(cmd, cwd=None):
     try:
-        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=30)
+        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=30, check=False)
         return (r.stdout or r.stderr).strip() or "(no output)"
     except FileNotFoundError:
         return "required binary not available in this container"
     except subprocess.TimeoutExpired:
         return "error: command timed out"
-    except Exception as e:  # noqa: BLE001
+    except BaseException as e:  # noqa: BLE001
         return f"error: {e}"
 
 
@@ -53,6 +53,7 @@ def git_state(repo_dir: str | None = None) -> str:
     inside = subprocess.run(
         ["git", "-C", path, "rev-parse", "--is-inside-work-tree"],
         capture_output=True,
+        check=False
     ).returncode == 0
     if not inside:
         return f"{path} is not a git repository (nothing to show)."
@@ -105,7 +106,7 @@ def gpu_status() -> str:
     """Report which model Ollama has loaded and how much VRAM it uses."""
     url = _env("OLLAMA_URL", "http://ollama:11434") + "/api/ps"
     try:
-        with urllib.request.urlopen(url, timeout=5) as r:  # noqa: S310 - localhost only
+        with urllib.request.urlopen(url, timeout=5) as r:
             data = json.load(r)
     except Exception as e:  # noqa: BLE001
         return f"cannot reach Ollama at {url}: {e}"
@@ -177,7 +178,7 @@ def system_status() -> str:
     try:
         result = _run(["docker", "compose", "ps"])
         status.append(f"Docker services:\n{result}")
-    except Exception as e:
+    except BaseException as e:  # noqa: BLE001
         status.append(f"Docker status check failed: {e}")
     
     # GPU status

@@ -10,7 +10,6 @@ artifact: one file that shows the trend across a month of runs.
 
 import json
 import sys
-from collections import defaultdict
 
 path = sys.argv[1] if len(sys.argv) > 1 else "eval/history.jsonl"
 

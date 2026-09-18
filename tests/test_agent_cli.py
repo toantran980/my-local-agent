@@ -2,7 +2,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_cli import LocalTools, apply_pending_writes, is_sensitive_path, resolve_repo_path
+from agent_cli import (
+    LocalTools,
+    apply_pending_writes,
+    is_sensitive_path,
+    resolve_repo_path,
+)
 
 
 class AgentCliSafetyTests(unittest.TestCase):

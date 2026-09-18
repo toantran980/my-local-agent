@@ -29,7 +29,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "qwen3:8b")
 MAX_TOOL_STEPS = 10
@@ -97,12 +96,12 @@ class LocalTools:
             return f"ERROR: unavailable tool {name}"
         except (KeyError, TypeError, ValueError) as exc:
             return f"ERROR: invalid tool arguments: {exc}"
-        except Exception as exc:  # Tool failures should return to the model.
+        except BaseException as exc:  # noqa: BLE001  # Tool failures should return to the model.
             return f"ERROR: {type(exc).__name__}: {exc}"
 
     def _run(self, command: list[str], timeout: int = 30) -> str:
         result = subprocess.run(
-            command, cwd=self.repo, capture_output=True, text=True, timeout=timeout
+            command, cwd=self.repo, capture_output=True, text=True, timeout=timeout, check=False
         )
         output = (result.stdout + result.stderr).strip() or "(no output)"
         return f"exit={result.returncode}\n{output[:MAX_FILE_BYTES]}"
@@ -122,7 +121,7 @@ class LocalTools:
                 target.write_text(content, encoding="utf-8")
             result = subprocess.run(
                 self._python_command() + ["-m", "pytest", "-q"], cwd=candidate,
-                capture_output=True, text=True, timeout=120,
+                capture_output=True, text=True, timeout=120, check=False
             )
             output = (result.stdout + result.stderr).strip() or "(no output)"
             return f"verification=staged-copy\nexit={result.returncode}\n{output[:MAX_FILE_BYTES]}"
@@ -240,7 +239,7 @@ def redact(value: Any) -> Any:
 
 def audit(path: Path, event: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    event["ts"] = dt.datetime.now(dt.timezone.utc).isoformat()
+    event["ts"] = dt.datetime.now(dt.UTC).isoformat()
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(redact(event), ensure_ascii=False) + "\n")
 
@@ -279,7 +278,7 @@ def run_agent(
     mode: str, prompt: str, repo: Path, model: str, url: str, apply: bool,
     history: list[dict[str, str]] | None = None,
 ) -> RunResult:
-    audit_file = repo / ".agent" / "audit" / f"{dt.date.today().isoformat()}.jsonl"
+    audit_file = repo / ".agent" / "audit" / f"{dt.datetime.now(dt.UTC).date().isoformat()}.jsonl"
     tools = LocalTools(repo, apply)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt(mode, apply)},
@@ -300,7 +299,7 @@ def run_agent(
             if mode == "ask":
                 answer = plain_terminal_text(answer)
             if mode == "plan":
-                plan_file = repo / ".agent" / "plans" / f"{dt.datetime.now().strftime('%Y%m%dT%H%M%S')}.md"
+                plan_file = repo / ".agent" / "plans" / f"{dt.datetime.now(dt.UTC).strftime('%Y%m%dT%H%M%S')}.md"
                 plan_file.parent.mkdir(parents=True, exist_ok=True)
                 plan_file.write_text(answer + "\n", encoding="utf-8")
                 return RunResult(answer, tools.pending_writes, audit_file, plan_file)
@@ -391,7 +390,7 @@ def interactive(mode: str, repo: Path, model: str, url: str, apply: bool) -> int
             result = run_agent(mode, prompt, repo, model, url, apply, history[-8:])
             answer = finish_run(result, mode, repo, apply)
             history.extend([{"role": "user", "content": prompt}, {"role": "assistant", "content": answer}])
-        except Exception as exc:
+        except BaseException as exc:  # noqa: BLE001
             print(f"agent error: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
@@ -415,7 +414,7 @@ def main() -> int:
     try:
         result = run_agent(args.mode, prompt, repo, args.model, args.url, args.apply)
         finish_run(result, args.mode, repo, args.apply)
-    except Exception as exc:
+    except BaseException as exc:  # noqa: BLE001
         print(f"agent error: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     return 0
