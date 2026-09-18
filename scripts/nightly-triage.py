@@ -44,7 +44,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "git_status",
-            "description": "Run `git status --short` and `git log --oneline -8` in the repo. Use to see what changed today.",
+            "description": (
+                "Run `git status --short` and `git log --oneline -8` in the repo. "
+                "Use to see what changed today."
+            ),
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -67,7 +70,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "grep",
-            "description": "Search repo files for a regex (e.g. 'TODO', 'FIXME', 'failing'). Returns up to 40 matches.",
+            "description": (
+                "Search repo files for a regex (e.g. 'TODO', 'FIXME', 'failing'). "
+                "Returns up to 40 matches."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -82,7 +88,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "gpu_status",
-            "description": "Which models are loaded on the GPU and their VRAM residency (READ-ONLY).",
+            "description": (
+                "Which models are loaded on the GPU and their VRAM "
+                "residency (READ-ONLY)."
+            ),
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -98,7 +107,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "write_report",
-            "description": "Write the final Markdown triage report to reports/<today>.md. Call LAST with the complete report.",
+            "description": (
+                "Write the final Markdown triage report to reports/<today>.md. "
+                "Call LAST with the complete report."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {"markdown": {"type": "string"}},
@@ -136,7 +148,7 @@ def _get(path, timeout=180):
     return _urlopen(req, timeout)
 
 
-def run_tool(name, args):
+def run_tool(name, args):  # noqa: PLR0911
     try:
         if name == "git_status":
             st = subprocess.run(
@@ -160,7 +172,9 @@ def run_tool(name, args):
             cmd = ["grep", "-rnI", pat, str(ROOT)]
             if gl:
                 cmd += ["--include", gl]
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False).stdout
+            out = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=30, check=False
+            ).stdout
             return out[:MAX_REPORT_SIZE] or "(no matches)"
         if name == "gpu_status":
             d = _get("/api/ps")

@@ -71,7 +71,7 @@ def list_projects(base_dir: str = "/projects") -> str:
 
 
 @mcp.tool()
-def read_project_file(
+def read_project_file(  # noqa: PLR0911
     project: str,
     file_path: str,
     base_dir: str = "/projects",

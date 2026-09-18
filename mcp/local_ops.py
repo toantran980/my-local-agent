@@ -80,7 +80,8 @@ def eval_history(runs: int = 10) -> str:
     f = Path(_env("EVAL_FILE", "/data/eval/history.jsonl"))
     rows = []
     if f.is_file():
-        rows = [json.loads(line) for line in f.read_text(errors="replace").splitlines() if line.strip()]
+        lines = f.read_text(errors="replace").splitlines()
+        rows = [json.loads(line) for line in lines if line.strip()]
     rows = rows[-runs:]
     if not rows:
         return "No eval history yet. Run scripts/run-eval.sh first."
@@ -172,7 +173,9 @@ def system_status() -> str:
     
     # Disk usage
     disk = shutil.disk_usage("/")
-    status.append(f"Disk: {disk.used / 1024 / 1024 / 1024:.1f} GB used / {disk.total / 1024 / 1024 / 1024:.1f} GB total")
+    used_gb = disk.used / 1024 / 1024 / 1024
+    total_gb = disk.total / 1024 / 1024 / 1024
+    status.append(f"Disk: {used_gb:.1f} GB used / {total_gb:.1f} GB total")
     
     # Docker services
     try:

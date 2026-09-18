@@ -191,27 +191,73 @@ class LocalTools:
 
 def tool_definitions(mode: str) -> list[dict[str, Any]]:
     tools = [
-        {"type": "function", "function": {"name": "git_status", "description": "Read the current git branch and working tree state.",
-            "parameters": {"type": "object", "properties": {}}}},
-        {"type": "function", "function": {"name": "read_file", "description": "Read a UTF-8 repository-relative file.",
-            "parameters": {"type": "object", "properties": {
-                "path": {"type": "string"}},
-            "required": ["path"]}}},
-        {"type": "function", "function": {"name": "search", "description": "Search repository text with a regular expression. Optional glob supports forms such as *.py.",
-            "parameters": {"type": "object", "properties": {
-                "pattern": {"type": "string"},
-                "glob": {"type": "string"}},
-            "required": ["pattern"]}}},
+        {
+            "type": "function",
+            "function": {
+                "name": "git_status",
+                "description": "Read the current git branch and working tree state.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read a UTF-8 repository-relative file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "search",
+                "description": (
+                    "Search repository text with a regular expression. "
+                    "Optional glob supports forms such as *.py."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {"type": "string"},
+                        "glob": {"type": "string"},
+                    },
+                    "required": ["pattern"],
+                },
+            },
+        },
     ]
     if mode == "agent":
         tools.extend([
-            {"type": "function", "function": {"name": "write_file", "description": "Write a complete repository-relative file. In dry-run mode this only records the proposed write.",
-            "parameters": {"type": "object", "properties": {
-                "path": {"type": "string"},
-                "content": {"type": "string"}},
-            "required": ["path", "content"]}}},
-            {"type": "function", "function": {"name": "run_tests", "description": "Run the fixed command python -m pytest -q in the repository.",
-            "parameters": {"type": "object", "properties": {}}}},
+            {
+                "type": "function",
+                "function": {
+                    "name": "write_file",
+                    "description": (
+                        "Write a complete repository-relative file. "
+                        "In dry-run mode this only records the proposed write."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string"},
+                            "content": {"type": "string"},
+                        },
+                        "required": ["path", "content"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "run_tests",
+                    "description": "Run the fixed command python -m pytest -q in the repository.",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
         ])
     return tools
 
@@ -235,15 +281,21 @@ def system_prompt(mode: str, apply: bool) -> str:
     ]
     if mode == "ask":
         rules.append(
-            "ASK MODE: answer the question; tools are read-only and files must never be changed. 
-            "Return plain terminal text: do not use Markdown bold, italics, headings, tables, or code fences."
+            "ASK MODE: answer the question; tools are read-only and files "
+            "must never be changed. Return plain terminal text: do not use "
+            "Markdown bold, italics, headings, tables, or code fences."
         )
     elif mode == "plan":
-        rules.append("PLAN MODE: inspect first, then give a numbered implementation plan with affected files, tests, risks, and no file changes.")
+        rules.append(
+            "PLAN MODE: inspect first, then give a numbered implementation "
+            "plan with affected files, tests, risks, and no file changes."
+        )
     else:
         rules.append(
-            "AGENT MODE: make the smallest safe change only when necessary, run tests after changes, "
-            f"and summarize every changed file. Write permission is {'enabled' if apply else 'disabled (dry-run)'}; "
+            "AGENT MODE: make the smallest safe change only when necessary, "
+            "run tests after changes, "
+            f"and summarize every changed file. Write permission is "
+            f"{'enabled' if apply else 'disabled (dry-run)'}; "
             "a DRY-RUN result is not a completed change."
         )
     return "\n".join(rules)
@@ -319,10 +371,10 @@ def apply_pending_writes(writes: dict[Path, str]) -> None:
         os.replace(temporary_path, path)
 
 
-def run_agent(
+def run_agent(  # noqa: PLR0913, PLR0917
     mode: str, prompt: str, repo: Path, model: str, url: str, apply: bool,
     history: list[dict[str, str]] | None = None,
-) -> RunResult:  # noqa: PLR0913, PLR0917
+) -> RunResult:
     audit_file = repo / ".agent" / "audit" / f"{dt.datetime.now(dt.UTC).date().isoformat()}.jsonl"
     tools = LocalTools(repo, apply)
     messages: list[dict[str, Any]] = [
@@ -363,7 +415,7 @@ def run_agent(
                 answer = plain_terminal_text(answer)
             if mode == "plan":
                 timestamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S")
-            plan_file = repo / ".agent" / "plans" / f"{timestamp}.md"
+                plan_file = repo / ".agent" / "plans" / f"{timestamp}.md"
                 plan_file.parent.mkdir(parents=True, exist_ok=True)
                 plan_file.write_text(answer + "\n", encoding="utf-8")
                 return RunResult(answer, tools.pending_writes, audit_file, plan_file)
