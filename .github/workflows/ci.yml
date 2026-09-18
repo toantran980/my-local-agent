@@ -41,7 +41,7 @@ jobs:
   smoke-test:
     name: Smoke Test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -54,27 +54,40 @@ jobs:
         run: |
           pip install ruff
 
-      - name: Start Ollama (no GPU)
+      - name: Start full stack with docker-compose
         run: |
-          docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
-          # Wait for Ollama to be ready
-          for i in {1..30}; do
-            if curl -sf http://localhost:11434/api/tags >/dev/null; then
-              echo "Ollama ready"
+          docker compose up -d --build
+          # Wait for all services to be ready
+          for i in {1..60}; do
+            if curl -sf http://localhost:11434/api/tags >/dev/null && \
+               curl -sf http://localhost:8000/local_ops/openapi.json >/dev/null; then
+              echo "All services ready"
               break
             fi
-            sleep 2
+            sleep 5
           done
 
       - name: Pull model (CPU)
         run: |
           curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:8b"}'
+          # Wait for model to be ready
+          for i in {1..30}; do
+            if curl -sf "http://localhost:11434/api/show?qwen3:8b" >/dev/null; then
+              echo "Model ready"
+              break
+            fi
+            sleep 5
+          done
 
       - name: Run smoke test
         env:
           OLLAMA_URL: http://localhost:11434
         run: |
           bash scripts/smoke-test.sh
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
 
   eval:
     name: Evaluation Suite
@@ -95,9 +108,9 @@ jobs:
             ~/.ollama
           key: ollama-${{ runner.os }}-${{ hashFiles('docker-compose.yml') }}
 
-      - name: Start Ollama (no GPU)
+      - name: Start services with docker-compose
         run: |
-          docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
+          docker compose up -d
           # Wait for Ollama API
           for i in {1..30}; do
             if curl -sf http://localhost:11434/api/tags >/dev/null; then
@@ -129,3 +142,7 @@ jobs:
               assert rate >= 1.0, 'Eval pass rate {:.0%} < 100%'.format(rate)
               print('Eval: {}/{} passed ({:.0%})'.format(last['passed'], last['total'], rate))
           "
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
