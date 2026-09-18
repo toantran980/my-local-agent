@@ -5,4 +5,4 @@ def frobnicate(x):
 
 
 def test_frobnicate():
-    assert frobnicate(1) == EXPECTED_RESULT  # 1+2 = 3, assertion now passes
+    assert frobnicate(1) == 5  # 1+2 = 3, but expected 5 - this fails

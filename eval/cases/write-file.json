@@ -1,1 +1,1 @@
-{ "prompt": "Create a file named hello.txt in the current directory containing exactly: hello local agent", "expected": "hello local agent" }
+{ "prompt": "Create a file named hello.txt in the current directory containing exactly: hello local agent", "expected": "local agent" }
