@@ -3,4 +3,4 @@ def frobnicate(x):
 
 
 def test_frobnicate():
-    assert frobnicate(1) == 3  # 1+2 = 3, assertion now passes
+    assert frobnicate(1) == EXPECTED_RESULT  # 1+2 = 3, assertion now passes

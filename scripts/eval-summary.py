@@ -41,4 +41,5 @@ for r in sorted(rows, key=lambda x: x.get("ts", "")):
     print(f"{day:<11} {model:<20} {p:>5} {t:>5} {rate:>5.0f}%")
 
 print("-" * 52)
-print(f"all-time: {all_p}/{all_t} ({(all_p / all_t * 100) if all_t else 0:.0f}%) across {len(rows)} runs")
+rate = (all_p / all_t * 100) if all_t else 0
+    print(f"all-time: {all_p}/{all_t} ({rate:.0f}%) across {len(rows)} runs")

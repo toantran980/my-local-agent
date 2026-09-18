@@ -164,9 +164,10 @@ def configs_overview(base_dir: str = "/configs") -> str:
 
 
 @mcp.tool()
+import shutil
+
 def system_status() -> str:
     """Show overall system status: disk, memory, and services."""
-    import shutil
     
     status = []
     

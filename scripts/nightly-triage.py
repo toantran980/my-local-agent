@@ -33,6 +33,12 @@ ROOT = Path(__file__).resolve().parent.parent
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 MODEL = os.environ.get("NIGHTLY_MODEL", "qwen3:8b")
 
+# Constants
+HTTP_BAD_REQUEST = 400
+GPU_THRESHOLD = 0.9
+MAX_REPORT_SIZE = 6000
+MAX_GIT_LOG = 8
+
 TOOLS = [
     {
         "type": "function",
@@ -110,7 +116,7 @@ def _urlopen(req, timeout=180):
             return json.loads(raw)
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")
-        if e.code == 400 and not body:
+        if e.code == HTTP_BAD_REQUEST and not body:
             return {"choices": [{"message": {"content": "", "tool_calls": None}}]}
         raise
 
@@ -138,7 +144,7 @@ def run_tool(name, args):
                 capture_output=True, text=True, timeout=30, check=False
             ).stdout
             log = subprocess.run(
-                ["git", "-C", str(ROOT), "log", "--oneline", "-8"],
+                ["git", "-C", str(ROOT), "log", "--oneline", f"-{MAX_GIT_LOG}"],
                 capture_output=True, text=True, timeout=30, check=False
             ).stdout
             return f"STATUS:\n{st or '(clean)'}\nLOG:\n{log or '(no commits yet)'}"
@@ -155,7 +161,7 @@ def run_tool(name, args):
             if gl:
                 cmd += ["--include", gl]
             out = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False).stdout
-            return out[:6000] or "(no matches)"
+            return out[:MAX_REPORT_SIZE] or "(no matches)"
         if name == "gpu_status":
             d = _get("/api/ps")
             parts = []
@@ -164,7 +170,7 @@ def run_tool(name, args):
                 s = m.get("size", 0) / 1e9
                 sv = m.get("size_vram", 0) / 1e9
                 fam = m.get("details", {}).get("family", "?")
-                gpu = "GPU" if (sv / s) >= 0.9 else "not on GPU"
+                gpu = "GPU" if (sv / s) >= GPU_THRESHOLD else "not on GPU"
                 parts.append(f"{name}  {s:.1f}GB total / {sv:.1f}GB VRAM  [{gpu}] {fam}")
             return "\n".join(parts) or "(no models loaded)"
         if name == "models_list":
@@ -204,7 +210,7 @@ def _urlopen(req, timeout=180):
             return json.loads(raw)
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")
-        if e.code == 400 and not body:
+        if e.code == HTTP_BAD_REQUEST and not body:
             return {"choices": [{"message": {"content": "", "tool_calls": None}}]}
         raise
 
@@ -235,7 +241,7 @@ def complete(messages):
     try:
         return _post("/v1/chat/completions", payload)
     except urllib.error.HTTPError as e:
-        if e.code == 400:
+        if e.code == HTTP_BAD_REQUEST:
             # likely "does not support tools" — try again without tools
             payload.pop("tools", None)
             return _post("/v1/chat/completions", payload)

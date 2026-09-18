@@ -27,7 +27,8 @@ class AgentCliSafetyTests(unittest.TestCase):
         )
 
     def test_write_is_staged_until_confirmation(self):
-        result = self.tools.call("write_file", {"path": "src/example.py", "content": "answer = 42\n"})
+        result = self.tools.call("write_file", {"path": "src/example.py",
+                                 "content": "answer = 42\n"})
         target = self.repo / "src" / "example.py"
         self.assertIn("STAGED", result)
         self.assertFalse(target.exists())

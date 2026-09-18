@@ -33,6 +33,11 @@ DEFAULT_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "qwen3:8b")
 MAX_TOOL_STEPS = 10
 MAX_FILE_BYTES = 32_000
+
+# Constants
+MAX_SEARCH_RESULTS = 80
+MAX_WRITE_SIZE = 1_000_000
+MAX_WRITE_RETRIES = 2
 EXCLUDED_DIRS = {".agent", ".git", ".venv", "__pycache__", "node_modules"}
 SENSITIVE_FILE_NAMES = {".env", ".npmrc", ".pypirc", "id_rsa", "id_ed25519"}
 
@@ -150,7 +155,7 @@ class LocalTools:
                 ):
                     if regex.search(line):
                         matches.append(f"{path.relative_to(self.repo)}:{number}: {line}")
-                        if len(matches) >= 80:
+                        if len(matches) >= MAX_SEARCH_RESULTS:
                             return "\n".join(matches)
             except OSError:
                 continue
@@ -160,7 +165,7 @@ class LocalTools:
         path = resolve_repo_path(self.repo, relative)
         if is_sensitive_path(self.repo, path):
             return "ERROR: writes to sensitive or runtime files are denied"
-        if len(content.encode("utf-8")) > 1_000_000:
+        if len(content.encode("utf-8")) > MAX_WRITE_SIZE:
             return "ERROR: proposed file content exceeds the 1 MB safety limit"
         self.pending_writes[path] = content
         if not self.apply:
@@ -317,7 +322,7 @@ def run_agent(
             if _is_write_refusal(result):
                 key = (name, result)
                 refusals[key] = refusals.get(key, 0) + 1
-                if refusals[key] == 2:
+                if refusals[key] >= MAX_WRITE_RETRIES:
                     question = (
                         f"You tried to write via `{name}` twice and got the same "
                         f"refusal both times:\n\n  {result}\n\n"
