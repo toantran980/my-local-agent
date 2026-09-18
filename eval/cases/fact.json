@@ -1,1 +1,1 @@
-{ "prompt": "Which company makes the RTX 5080? Reply with the company name only.", "expected": "NVIDIA" }
+{ "prompt": "What is the capital of France? Reply with the city name only.", "expected": "Paris" }
