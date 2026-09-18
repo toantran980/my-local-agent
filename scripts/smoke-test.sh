@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Smoke test for the local stack. Run from the project root inside WSL2.
-#   ./scripts/smoke-test.sh [model]     (default: qwen3:8b)
+#   ./scripts/smoke-test.sh [model]     (default: auto-detect)
 #
 # Checks, in order:
 #   1. Ollama API is alive and lists models
@@ -12,8 +12,33 @@ set -euo pipefail
 #   5. agent_cli.py dry-run works (ask mode)
 
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
-MODEL="${1:-qwen3:8b}"
+MODEL="${1:-${SMOKE_MODEL:-}}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# If no model specified, auto-detect from available models
+if [ -z "$MODEL" ]; then
+    echo "==> Auto-detecting available model..."
+    MODEL=$(curl -sfS "$OLLAMA_URL/api/tags" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+models = data.get('models', [])
+if models:
+    # Prefer qwen3:0.6b for CI, then qwen3:8b, then first available
+    for m in models:
+        name = m.get('name', '')
+        if 'qwen3:0.6b' in name:
+            print(name)
+            break
+    else:
+        for m in models:
+            name = m.get('name', '')
+            if 'qwen3:8b' in name:
+                print(name)
+                break
+        else:
+            print(models[0].get('name', ''))
+" || echo "qwen3:0.6b")
+fi
 
 echo "==> 1. Ollama alive at $OLLAMA_URL"
 curl -fsS "$OLLAMA_URL/api/tags" >/dev/null && echo "    OK: /api/tags reachable"
