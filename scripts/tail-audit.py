@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# noqa: EXE001
 """One-time viewer: render today's agent audit trail as plain text so the
 user can see — with zero quoting drama — what the agent actually did in its
 10-step real-task run before the safety cap stopped it.

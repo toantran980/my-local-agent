@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# noqa: EXE001
 """nightly-triage agent — a real scheduled agent, self-hosted, no opencode.
 
 Pure-Python tool-calling loop against the local Ollama (qwen3:8b on the RTX

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# noqa: EXE001
 """Local terminal agent with Ask, Plan, and Agent modes.
 
 Examples:

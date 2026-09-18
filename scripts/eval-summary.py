@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# noqa: EXE001
 """Render eval history as a pass-rate table.
 
     python3 scripts/eval-summary.py [history.jsonl]
