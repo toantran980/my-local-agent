@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  smoke-test:
-    name: Smoke Test
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -38,10 +38,48 @@ jobs:
             fi
           done
 
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          pip install ruff
+
+      - name: Start Ollama (no GPU)
+        run: |
+          docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
+          # Wait for Ollama to be ready
+          for i in {1..30}; do
+            if curl -sf http://localhost:11434/api/tags >/dev/null; then
+              echo "Ollama ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Pull model (CPU)
+        run: |
+          curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:8b"}'
+
+      - name: Run smoke test
+        env:
+          OLLAMA_URL: http://localhost:11434
+        run: |
+          bash scripts/smoke-test.sh
+
   eval:
     name: Evaluation Suite
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -57,12 +95,20 @@ jobs:
             ~/.ollama
           key: ollama-${{ runner.os }}-${{ hashFiles('docker-compose.yml') }}
 
-      - name: Start services (no GPU in CI)
+      - name: Start Ollama (no GPU)
         run: |
-          # Start Ollama without GPU for eval
           docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
-          sleep 10
-          # Pull model (no GPU, CPU inference)
+          # Wait for Ollama API
+          for i in {1..30}; do
+            if curl -sf http://localhost:11434/api/tags >/dev/null; then
+              echo "Ollama ready"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Pull model
+        run: |
           curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:8b"}'
 
       - name: Run eval suite
@@ -70,7 +116,6 @@ jobs:
           OLLAMA_URL: http://localhost:11434
         run: |
           cd eval
-          # Note: eval runs against CPU Ollama in CI (slower, no GPU)
           bash ../scripts/run-eval.sh qwen3:8b
           python3 ../scripts/eval-summary.py
 
