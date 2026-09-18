@@ -68,13 +68,13 @@ services:
       - .:/repo:ro
       # HOMELAB EXPANSION: Uncomment and configure these for project access
       # Option 1: Use Linux filesystem (recommended for WSL2 performance)
-      # - /home/toant/projects:/projects:ro          # your project directories
-      # - /home/toant/configs:/configs:ro            # configuration files
-      # - /home/toant/logs:/logs:ro                  # log files for analysis
+      # - ${MY_LOCAL_AGENT_ROOT:-/home/$USER}/projects:/projects:ro
+      # - ${MY_LOCAL_AGENT_ROOT:-/home/$USER}/configs:/configs:ro
+      # - ${MY_LOCAL_AGENT_ROOT:-/home/$USER}/logs:/logs:ro
       # Option 2: Use Windows filesystem (slower but accessible from Windows)
-      - /mnt/c/Users/toant/projects:/projects:ro
-      - /mnt/c/Users/toant/configs:/configs:ro
-      - /mnt/c/Users/toant/logs:/logs:ro
+      # - ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/projects:/projects:ro
+      # - ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/configs:/configs:ro
+      # - ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/logs:/logs:ro
 
   # ---------------------------------------------------------------
   # OPTIONAL: Authentication Proxy (for homelab network access)

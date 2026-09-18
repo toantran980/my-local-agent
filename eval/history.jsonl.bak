@@ -1,2 +1,0 @@
-{"ts": "2026-09-15T03:54:20.750328+00:00", "model": "ollama/qwen3:8b", "passed": 0, "total": 6}
-{"ts": "2026-09-15T04:09:24.763312+00:00", "model": "ollama/qwen3:8b", "passed": 6, "total": 6}

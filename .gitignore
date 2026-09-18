@@ -10,18 +10,10 @@ __pycache__/
 logs/*
 reports/*
 agent-reports/*
-.agent/audit/
-.agent/plans/
+.agent/
 debug.log
 workspace/*
 !workspace/README.md
-
-# Local runtime output
-logs/*
-reports/*
-agent-reports/*
-.agent/audit/
-.agent/plans/
 
 # Environment and local configuration
 .env

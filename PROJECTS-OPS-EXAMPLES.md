@@ -1,290 +1,118 @@
-# projects_ops Usage Examples
+# projects_ops MCP — Usage Examples
 
-This guide shows how to use the projects_ops MCP server for various project analysis tasks.
+The `projects_ops` MCP server provides read-only access to your project directories via structured tools.
 
-## Prerequisites
+## Available Tools
 
-- Docker Desktop running with services started
-- projects_ops MCP server configured in Open WebUI
-- Projects in `/mnt/c/Users/toant/projects/` directory
+| Tool | Description |
+|------|-------------|
+| `list_projects()` | List all project directories in `/projects` |
+| `get_project_structure(project, base_dir)` | Tree view of a project |
+| `read_project_file(project, file_path, base_dir)` | Read a file's content |
+| `search_projects(pattern, base_dir)` | Regex search across projects |
+| `list_project_files(project, base_dir)` | List files in a project |
 
-## Sample Projects Created
+---
 
-Three sample projects have been created for testing:
+## CLI Examples (via mcpo OpenAPI)
 
-1. **web-app/** - React/Node.js web application
-2. **backend-api/** - RESTful API service  
-3. **data-pipeline/** - ETL data processing pipeline
-
-## Open WebUI Configuration
-
-1. Open http://localhost:3000
-2. Go to **Admin Panel → Settings → Integrations → External Tool Servers**
-3. Add new OpenAPI server:
-   - Name: `projects_ops`
-   - URL: `http://mcpo:8000/projects_ops`
-4. Enable the tool in chat sessions (click tools icon in top-right)
-
-## Usage Examples
-
-### 1. List Available Projects
-
-**Prompt:**
-```
-Use the projects_ops tool to list all available projects in /projects
-```
-
-**Expected Result:**
-- Returns: web-app, backend-api, data-pipeline
-
-### 2. Analyze Project Structure
-
-**Prompt:**
-```
-Use projects_ops to get the structure of the web-app project
-```
-
-**Expected Result:**
-- Tree view showing directories and files in web-app/
-- Helps understand project layout before deep analysis
-
-### 3. Read Configuration Files
-
-**Prompt:**
-```
-Use projects_ops to read the package.json file from the web-app project
-```
-
-**Expected Result:**
-- Returns the package.json content
-- Shows dependencies, scripts, and project metadata
-
-### 4. Search Across Projects
-
-**Prompt:**
-```
-Use projects_ops to search for "TODO" comments across all projects
-```
-
-**Expected Result:**
-- Lists files containing TODO comments
-- Shows line numbers and context
-
-### 5. Code Review - Web Application
-
-**Prompt:**
-```
-Use projects_ops to read the src/index.js file from web-app and review the code for best practices
-```
-
-**Expected Result:**
-- Code analysis of the Express.js server
-- Suggestions for improvements
-
-### 6. API Documentation Review
-
-**Prompt:**
-```
-Use projects_ops to read the server.js from backend-api and document the API endpoints
-```
-
-**Expected Result:**
-- Documentation of API endpoints
-- Analysis of the Express.js API structure
-
-### 7. Data Pipeline Analysis
-
-**Prompt:**
-```
-Use projects_ops to read the pipeline.py from data-pipeline and analyze the ETL workflow
-```
-
-**Expected Result:**
-- Analysis of the data processing pipeline
-- Suggestions for optimization
-
-### 8. Cross-Project Dependency Analysis
-
-**Prompt:**
-```
-Use projects_ops to search for "import" or "require" statements across all projects to understand dependencies
-```
-
-**Expected Result:**
-- Lists all import/require statements
-- Shows dependency relationships between projects
-
-### 9. Configuration Comparison
-
-**Prompt:**
-```
-Use projects_ops to read the package.json from web-app and compare it with typical Node.js project structures
-```
-
-**Expected Result:**
-- Analysis of project configuration
-- Comparison with standard patterns
-
-### 10. Security Review
-
-**Prompt:**
-```
-Use projects_ops to search for potential security issues like hardcoded passwords or API keys across all projects
-```
-
-**Expected Result:**
-- Security analysis of codebase
-- Identification of potential vulnerabilities
-
-## CLI Testing Examples
-
-When Docker is running, you can test directly via CLI:
-
+### List projects
 ```bash
-# List projects
 curl -X POST http://localhost:8000/projects_ops/list_projects \
   -H "Content-Type: application/json" \
   -d '{"base_dir": "/projects"}'
+```
 
-# Get project structure
+### Get project structure
+```bash
 curl -X POST http://localhost:8000/projects_ops/get_project_structure \
   -H "Content-Type: application/json" \
-  -d '{"project": "web-app", "base_dir": "/projects"}'
+  -d '{"project": "myapp", "base_dir": "/projects"}'
+```
 
-# Read a file
+### Read a file
+```bash
 curl -X POST http://localhost:8000/projects_ops/read_project_file \
   -H "Content-Type: application/json" \
-  -d '{"project": "web-app", "file_path": "README.md", "base_dir": "/projects"}'
+  -d '{"project": "myapp", "file_path": "src/main.py", "base_dir": "/projects"}'
+```
 
-# Search across projects
+### Search across projects
+```bash
 curl -X POST http://localhost:8000/projects_ops/search_projects \
   -H "Content-Type: application/json" \
-  -d '{"pattern": "TODO", "base_dir": "/projects"}'
+  -d '{"pattern": "TODO|FIXME", "base_dir": "/projects"}'
+```
 
-# List files in a project
+### List project files
+```bash
 curl -X POST http://localhost:8000/projects_ops/list_project_files \
   -H "Content-Type: application/json" \
-  -d '{"project": "web-app", "base_dir": "/projects"}'
+  -d '{"project": "myapp", "base_dir": "/projects"}'
 ```
 
-## Project-Specific Examples
+---
 
-### Web Application Development
+## Open WebUI Integration
 
-**Code Review:**
-```
-Read the src/index.js from web-app and suggest improvements for error handling and logging
-```
+1. Admin Panel → Settings → Integrations → External Tool Servers
+2. Add OpenAPI server:
+   - Name: `projects_ops`
+   - URL: `http://mcpo:8000/projects_ops`
+3. Enable in chat sessions (top-right tools icon)
 
-**Architecture Analysis:**
+Then in chat:
 ```
-Get the structure of web-app and analyze the project architecture pattern
-```
-
-### Backend API Development
-
-**API Documentation:**
-```
-Read the server.js from backend-api and generate API documentation
+Use projects_ops to list_projects in /projects
+Use projects_ops to get_project_structure for project "myapp" in /projects
+Use projects_ops to read_project_file from project "myapp", file "src/main.py"
+Use projects_ops to search_projects for pattern "TODO" in /projects
 ```
 
-**Database Schema Analysis:**
-```
-Search for database models and schema definitions in backend-api
-```
+---
 
-### Data Engineering
+## Project Directory Setup
 
-**Pipeline Review:**
-```
-Read the pipeline.py from data-pipeline and analyze the ETL workflow efficiency
-```
-
-**Error Handling:**
-```
-Search for error handling patterns in data-pipeline and suggest improvements
+```bash
+# Create your projects (on Windows host)
+mkdir -p ~/projects/myapp/src
+echo "print('hello')" > ~/projects/myapp/src/main.py
+echo "# My App" > ~/projects/myapp/README.md
 ```
 
-## Advanced Use Cases
-
-### Multi-Project Refactoring
-
-**Prompt:**
-```
-Analyze all three projects and suggest ways to improve code consistency and shared patterns
+Docker mounts `~/projects` → `/projects` (read-only) via compose:
+```yaml
+volumes:
+  - ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/projects:/projects:ro
 ```
 
-### Performance Analysis
+---
 
-**Prompt:**
-```
-Search for performance bottlenecks like nested loops or inefficient database queries across all projects
-```
+## Security (All Enforced)
 
-### Documentation Generation
+- Path traversal blocked (paths resolved relative to base dir)
+- Sensitive files blocked (`.env`, keys, certs, etc.)
+- 32KB read limit per file
+- Exclusions: `.git`, `node_modules`, `__pycache__`, `.venv`, etc.
+- Read-only — no write capability
+- All services bind to localhost only
 
-**Prompt:**
-```
-Generate comprehensive documentation for the web-app project by reading all source files
-```
-
-### Code Quality Metrics
-
-**Prompt:**
-```
-Analyze code quality across all projects by searching for anti-patterns and suggesting improvements
-```
-
-## Security Features
-
-The projects_ops server includes several security features:
-
-- **Path Traversal Protection**: Prevents access outside project directories
-- **Sensitive File Filtering**: Blocks .env, keys, certificates
-- **File Size Limits**: 32KB read limit prevents memory issues
-- **Directory Exclusion**: Skips .git, node_modules, __pycache__
+---
 
 ## Troubleshooting
 
-### Projects Not Listed
+```bash
+# Verify mcpo sees tools
+curl -s http://localhost:8000/openapi.json | grep projects_ops
 
-**Problem:** list_projects returns "No projects found"
+# Test file access
+curl -X POST http://localhost:8000/projects_ops/read_project_file \
+  -H "Content-Type: application/json" \
+  -d '{"project": "", "file_path": "README.md", "base_dir": "/projects"}'
 
-**Solution:**
-- Verify directories exist: `ls -la /mnt/c/Users/toant/projects/`
-- Check Docker mount: `docker exec mcpo ls -la /projects`
-- Restart mcpo: `docker compose restart mcpo`
+# Check mount
+docker exec mcpo ls -la /projects
 
-### File Read Errors
-
-**Problem:** read_project_file returns "File not found"
-
-**Solution:**
-- Verify file path is correct
-- Check if file is in excluded directory
-- Ensure file is not a sensitive file (.env, keys)
-
-### Search Returns No Results
-
-**Problem:** search_projects returns "No matches found"
-
-**Solution:**
-- Verify search pattern is correct regex
-- Check if files exist in projects
-- Ensure files are not in excluded directories
-
-## Next Steps
-
-1. **Start Docker Desktop** to enable services
-2. **Test CLI commands** to verify functionality
-3. **Add to Open WebUI** for agent usage
-4. **Populate with real projects** from your development work
-5. **Create custom examples** based on your specific use cases
-
-## Sample Project Locations
-
-- **Web App:** `C:\Users\toant\projects\web-app\`
-- **Backend API:** `C:\Users\toant\projects\backend-api\`
-- **Data Pipeline:** `C:\Users\toant\projects\data-pipeline\`
-
-These sample projects provide realistic scenarios for testing the projects_ops functionality with different types of development work.
+# Check mcpo logs
+docker logs mcpo --tail 20
+```

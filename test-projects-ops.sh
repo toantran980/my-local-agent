@@ -34,8 +34,8 @@ MOUNT_INFO=$(docker inspect mcpo | grep -A 5 "projects" || echo "")
 if [[ "$MOUNT_INFO" == *"/mnt/c"* ]]; then
     echo "📁 Windows filesystem mounted (/mnt/c/...)"
     BASE_DIR="/projects"  # Container path stays same
-elif [[ "$MOUNT_INFO" == *"/home/toant"* ]]; then
-    echo "📁 Linux filesystem mounted (/home/toant/...)"
+elif [[ "$MOUNT_INFO" == *"${MY_LOCAL_AGENT_ROOT:-/home/$USER}"* ]]; then
+    echo "📁 Linux filesystem mounted (${MY_LOCAL_AGENT_ROOT:-/home/$USER}/...)"
     BASE_DIR="/projects"
 else
     echo "⚠️  Could not determine mount type, testing default /projects"
@@ -55,7 +55,7 @@ if [[ "$RESPONSE" == *"error"* ]] || [[ -z "$RESPONSE" ]]; then
     echo ""
     echo "Troubleshooting:"
     echo "1. Check if directories exist on host:"
-    echo "   ls -la /home/toant/projects  # or /mnt/c/Users/toant/projects"
+    echo "   ls -la ${MY_LOCAL_AGENT_ROOT:-/home/$USER}/projects  # or ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/projects"
     echo "2. Check docker mounts:"
     echo "   docker inspect mcpo | grep -A 10 mounts"
     echo "3. Check container paths:"

@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install ruff shellcheck-py
+
+      - name: Lint Python
+        run: ruff check .
+
+      - name: Lint shell scripts
+        run: shellcheck scripts/*.sh
+
+      - name: Check file permissions
+        run: |
+          for f in scripts/*.sh; do
+            if [ ! -x "$f" ]; then
+              echo "ERROR: $f is not executable"
+              exit 1
+            fi
+          done
+
+  eval:
+    name: Evaluation Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Ollama model
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ollama
+          key: ollama-${{ runner.os }}-${{ hashFiles('docker-compose.yml') }}
+
+      - name: Start services (no GPU in CI)
+        run: |
+          # Start Ollama without GPU for eval
+          docker run -d --name ollama -p 11434:11434 ollama/ollama:latest
+          sleep 10
+          # Pull model (no GPU, CPU inference)
+          curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:8b"}'
+
+      - name: Run eval suite
+        env:
+          OLLAMA_URL: http://localhost:11434
+        run: |
+          cd eval
+          # Note: eval runs against CPU Ollama in CI (slower, no GPU)
+          bash ../scripts/run-eval.sh qwen3:8b
+          python3 ../scripts/eval-summary.py
+
+      - name: Check eval pass rate
+        run: |
+          python3 -c "
+import json
+with open('eval/history.jsonl') as f:
+    last = json.loads(list(f)[-1])
+    rate = last['passed'] / last['total']
+    assert rate >= 1.0, f'Eval pass rate {rate:.0%} < 100%'
+    print(f'Eval: {last[\"passed\"]}/{last[\"total\"]} passed ({rate:.0%})')
+"

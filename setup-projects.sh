@@ -8,16 +8,16 @@ echo "=== Homelab Project Directory Setup ==="
 
 # Detect if we should use Linux or Windows filesystem
 echo "Choose filesystem location:"
-echo "1) Linux filesystem (/home/toant/...) - Faster, WSL2 native"
-echo "2) Windows filesystem (/mnt/c/Users/toant/...) - Slower, accessible from Windows"
+echo "1) Linux filesystem (${MY_LOCAL_AGENT_ROOT:-/home/$USER}/...) - Faster, WSL2 native"
+echo "2) Windows filesystem (${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/...) - Slower, accessible from Windows"
 read -p "Enter choice (1 or 2) [default: 1]: " choice
 choice=${choice:-1}
 
 if [ "$choice" = "2" ]; then
-    BASE_DIR="/mnt/c/Users/toant"
+    BASE_DIR="${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}"
     echo "Using Windows filesystem: $BASE_DIR"
 else
-    BASE_DIR="/home/toant"
+    BASE_DIR="${MY_LOCAL_AGENT_ROOT:-/home/$USER}"
     echo "Using Linux filesystem: $BASE_DIR"
 fi
 
@@ -41,8 +41,8 @@ echo ""
 echo "=== IMPORTANT ==="
 if [ "$choice" = "2" ]; then
     echo "You chose Windows filesystem. Update docker-compose.yml:"
-    echo "  - Comment out Linux paths (/home/toant/...)"
-    echo "  - Uncomment Windows paths (/mnt/c/Users/toant/...)"
+    echo "  - Comment out Linux paths (${MY_LOCAL_AGENT_ROOT:-/home/$USER}/...)"
+    echo "  - Uncomment Windows paths (${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/...)"
     echo ""
     echo "Then restart mcpo:"
     echo "  docker compose restart mcpo"
@@ -51,7 +51,7 @@ else
     echo ""
     echo "Next steps:"
     echo "1. Navigate to your project directory:"
-    echo "   cd /home/toant/repos/my-local-agent"
+    echo "   cd ${MY_LOCAL_AGENT_ROOT:-$(pwd)}"
     echo ""
     echo "2. Restart mcpo service:"
     echo "   docker compose restart mcpo"
