@@ -21,6 +21,7 @@ Env overrides (defaults match the compose mounts):
 
 import json
 import os
+import shutil
 import subprocess
 import urllib.request
 from pathlib import Path
@@ -164,8 +165,6 @@ def configs_overview(base_dir: str = "/configs") -> str:
 
 
 @mcp.tool()
-import shutil
-
 def system_status() -> str:
     """Show overall system status: disk, memory, and services."""
     

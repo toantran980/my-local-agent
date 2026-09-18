@@ -76,7 +76,7 @@ class LocalTools:
         self.pending_writes: dict[Path, str] = {}
         self.test_results: list[str] = []
 
-    def call(self, name: str, args: dict[str, Any]) -> str:
+    def call(self, name: str, args: dict[str, Any]) -> str:  # noqa: PLR0911
         try:
             if name == "git_status":
                 return self._run(["git", "status", "--short", "--branch"])
@@ -118,7 +118,15 @@ class LocalTools:
             shutil.copytree(
                 self.repo,
                 candidate,
-                ignore=shutil.ignore_patterns(*EXCLUDED_DIRS, ".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx"),
+                ignore=shutil.ignore_patterns(
+                *EXCLUDED_DIRS,
+                ".env",
+                ".env.*",
+                "*.pem",
+                "*.key",
+                "*.p12",
+                "*.pfx",
+            ),
             )
             for source_path, content in self.pending_writes.items():
                 target = candidate / source_path.relative_to(self.repo)
@@ -169,20 +177,41 @@ class LocalTools:
             return "ERROR: proposed file content exceeds the 1 MB safety limit"
         self.pending_writes[path] = content
         if not self.apply:
-            return f"STAGED DRY-RUN: {relative} ({len(content)} chars). It will not be written without --apply and confirmation."
-        return f"STAGED: {relative} ({len(content)} chars). The user must still confirm the diff before it is written."
+            dry_msg = (
+            f"STAGED DRY-RUN: {relative} ({len(content)} chars). "
+            "It will not be written without --apply and confirmation."
+        )
+        return dry_msg
+        staged_msg = (
+            f"STAGED: {relative} ({len(content)} chars). "
+            "The user must still confirm the diff before it is written."
+        )
+        return staged_msg
 
 
 def tool_definitions(mode: str) -> list[dict[str, Any]]:
     tools = [
-        {"type": "function", "function": {"name": "git_status", "description": "Read the current git branch and working tree state.", "parameters": {"type": "object", "properties": {}}}},
-        {"type": "function", "function": {"name": "read_file", "description": "Read a UTF-8 repository-relative file.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
-        {"type": "function", "function": {"name": "search", "description": "Search repository text with a regular expression. Optional glob supports forms such as *.py.", "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}, "glob": {"type": "string"}}, "required": ["pattern"]}}},
+        {"type": "function", "function": {"name": "git_status", "description": "Read the current git branch and working tree state.",
+            "parameters": {"type": "object", "properties": {}}}},
+        {"type": "function", "function": {"name": "read_file", "description": "Read a UTF-8 repository-relative file.",
+            "parameters": {"type": "object", "properties": {
+                "path": {"type": "string"}},
+            "required": ["path"]}}},
+        {"type": "function", "function": {"name": "search", "description": "Search repository text with a regular expression. Optional glob supports forms such as *.py.",
+            "parameters": {"type": "object", "properties": {
+                "pattern": {"type": "string"},
+                "glob": {"type": "string"}},
+            "required": ["pattern"]}}},
     ]
     if mode == "agent":
         tools.extend([
-            {"type": "function", "function": {"name": "write_file", "description": "Write a complete repository-relative file. In dry-run mode this only records the proposed write.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}}},
-            {"type": "function", "function": {"name": "run_tests", "description": "Run the fixed command python -m pytest -q in the repository.", "parameters": {"type": "object", "properties": {}}}},
+            {"type": "function", "function": {"name": "write_file", "description": "Write a complete repository-relative file. In dry-run mode this only records the proposed write.",
+            "parameters": {"type": "object", "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"}},
+            "required": ["path", "content"]}}},
+            {"type": "function", "function": {"name": "run_tests", "description": "Run the fixed command python -m pytest -q in the repository.",
+            "parameters": {"type": "object", "properties": {}}}},
         ])
     return tools
 
@@ -206,7 +235,7 @@ def system_prompt(mode: str, apply: bool) -> str:
     ]
     if mode == "ask":
         rules.append(
-            "ASK MODE: answer the question; tools are read-only and files must never be changed. "
+            "ASK MODE: answer the question; tools are read-only and files must never be changed. 
             "Return plain terminal text: do not use Markdown bold, italics, headings, tables, or code fences."
         )
     elif mode == "plan":
@@ -238,7 +267,11 @@ def redact(value: Any) -> Any:
         return [redact(item) for item in value]
     if not isinstance(value, str):
         return value
-    value = re.sub(r"(?i)(api[_-]?key|token|secret|password)\s*([=:])\s*[^\s,;]+", r"\1\2[REDACTED]", value)
+    value = re.sub(
+        r"(?i)(api[_-]?key|token|secret|password)\s*([=:])\s*[^\s,;]+",
+        r"\1\2[REDACTED]",
+        value
+    )
     return re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [REDACTED]", value)
 
 
@@ -259,10 +292,17 @@ def render_diffs(repo: Path, writes: dict[Path, str]) -> str:
     """Return a bounded unified diff for staged whole-file writes."""
     chunks: list[str] = []
     for path, replacement in writes.items():
-        before = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True) if path.exists() else []
+        before = (
+        path.read_text(encoding="utf-8", errors="replace")
+        .splitlines(keepends=True)
+    ) if path.exists() else []
         after = replacement.splitlines(keepends=True)
         relative = path.relative_to(repo)
-        chunks.extend(difflib.unified_diff(before, after, fromfile=f"a/{relative}", tofile=f"b/{relative}"))
+        chunks.extend(
+    difflib.unified_diff(
+        before, after, fromfile=f"a/{relative}", tofile=f"b/{relative}"
+    )
+)
     text = "".join(chunks)
     return text[:MAX_FILE_BYTES] or "(no content changes)"
 
@@ -282,7 +322,7 @@ def apply_pending_writes(writes: dict[Path, str]) -> None:
 def run_agent(
     mode: str, prompt: str, repo: Path, model: str, url: str, apply: bool,
     history: list[dict[str, str]] | None = None,
-) -> RunResult:
+) -> RunResult:  # noqa: PLR0913, PLR0917
     audit_file = repo / ".agent" / "audit" / f"{dt.datetime.now(dt.UTC).date().isoformat()}.jsonl"
     tools = LocalTools(repo, apply)
     messages: list[dict[str, Any]] = [
@@ -290,11 +330,29 @@ def run_agent(
     ]
     messages.extend(history or [])
     messages.append({"role": "user", "content": prompt})
-    audit(audit_file, {"event": "run_started", "mode": mode, "model": model, "apply": apply, "prompt": prompt})
+    audit(
+    audit_file,
+    {
+        "event": "run_started",
+        "mode": mode,
+        "model": model,
+        "apply": apply,
+        "prompt": prompt,
+    },
+)
     refusals: dict[tuple[str, str], int] = {}
 
     for _ in range(MAX_TOOL_STEPS):
-        response = post(url, {"model": model, "messages": messages, "tools": tool_definitions(mode), "stream": False, "options": {"temperature": 0}})
+        response = post(
+    url,
+    {
+        "model": model,
+        "messages": messages,
+        "tools": tool_definitions(mode),
+        "stream": False,
+        "options": {"temperature": 0},
+    },
+)
         message = response["choices"][0]["message"]
         messages.append(message)
         calls = message.get("tool_calls") or []
@@ -304,7 +362,8 @@ def run_agent(
             if mode == "ask":
                 answer = plain_terminal_text(answer)
             if mode == "plan":
-                plan_file = repo / ".agent" / "plans" / f"{dt.datetime.now(dt.UTC).strftime('%Y%m%dT%H%M%S')}.md"
+                timestamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S")
+            plan_file = repo / ".agent" / "plans" / f"{timestamp}.md"
                 plan_file.parent.mkdir(parents=True, exist_ok=True)
                 plan_file.write_text(answer + "\n", encoding="utf-8")
                 return RunResult(answer, tools.pending_writes, audit_file, plan_file)
@@ -317,7 +376,16 @@ def run_agent(
                 arguments = {}
             name = function.get("name", "")
             result = tools.call(name, arguments)
-            audit(audit_file, {"event": "tool_called", "mode": mode, "tool": name, "arguments": arguments, "result": result})
+            audit(
+    audit_file,
+    {
+        "event": "tool_called",
+        "mode": mode,
+        "tool": name,
+        "arguments": arguments,
+        "result": result,
+    },
+)
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": result})
             if _is_write_refusal(result):
                 key = (name, result)
@@ -331,7 +399,10 @@ def run_agent(
                         "spinning. Want me to target a path under the repo root "
                         "(e.g. `reports/<date>.md`), or skip writing entirely?"
                     )
-                    audit(audit_file, {"event": "asked_for_input", "reason": "repeated_write_refusal", "tool": name})
+                    audit(
+    audit_file,
+    {"event": "asked_for_input", "reason": "repeated_write_refusal", "tool": name},
+)
                     return RunResult(question, tools.pending_writes, audit_file)
     audit(audit_file, {"event": "run_stopped", "reason": "tool_step_limit"})
     return RunResult(
@@ -380,7 +451,10 @@ def interactive(mode: str, repo: Path, model: str, url: str, apply: bool) -> int
         if prompt in {"/quit", "/exit"}:
             return 0
         if prompt == "/status":
-            print(f"mode={mode} apply={apply} repo={repo} model={model} history_turns={len(history) // 2}")
+            print(
+    f"mode={mode} apply={apply} repo={repo} model={model} "
+    f"history_turns={len(history) // 2}"
+)
             continue
         if prompt.startswith("/mode "):
             requested = prompt.removeprefix("/mode ").strip().lower()
@@ -394,19 +468,30 @@ def interactive(mode: str, repo: Path, model: str, url: str, apply: bool) -> int
         try:
             result = run_agent(mode, prompt, repo, model, url, apply, history[-8:])
             answer = finish_run(result, mode, repo, apply)
-            history.extend([{"role": "user", "content": prompt}, {"role": "assistant", "content": answer}])
+            history.extend([
+    {"role": "user", "content": prompt},
+    {"role": "assistant", "content": answer},
+])
         except BaseException as exc:  # noqa: BLE001
             print(f"agent error: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Self-hosted Ask / Plan / Agent terminal assistant")
+    parser = argparse.ArgumentParser(
+    description="Self-hosted Ask / Plan / Agent terminal assistant"
+)
     parser.add_argument("mode", choices=("ask", "plan", "agent"))
     parser.add_argument("prompt", nargs="*", help="Task; omit for interactive input")
-    parser.add_argument("--repo", type=Path, default=Path.cwd(), help="Repository root (default: current directory)")
+    parser.add_argument(
+    "--repo", type=Path, default=Path.cwd(),
+    help="Repository root (default: current directory)"
+)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--url", default=DEFAULT_URL)
-    parser.add_argument("--apply", action="store_true", help="Permit Agent mode to write files under --repo")
+    parser.add_argument(
+    "--apply", action="store_true",
+    help="Permit Agent mode to write files under --repo"
+)
     args = parser.parse_args()
     if args.apply and args.mode != "agent":
         parser.error("--apply is valid only in agent mode")

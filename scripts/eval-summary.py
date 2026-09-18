@@ -42,4 +42,4 @@ for r in sorted(rows, key=lambda x: x.get("ts", "")):
 
 print("-" * 52)
 rate = (all_p / all_t * 100) if all_t else 0
-    print(f"all-time: {all_p}/{all_t} ({rate:.0f}%) across {len(rows)} runs")
+print(f"all-time: {all_p}/{all_t} ({rate:.0f}%) across {len(rows)} runs")

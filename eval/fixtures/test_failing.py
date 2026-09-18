@@ -1,3 +1,5 @@
+EXPECTED_RESULT = 3
+
 def frobnicate(x):
     return x + 2
 
