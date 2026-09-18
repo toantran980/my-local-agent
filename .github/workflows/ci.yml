@@ -74,7 +74,7 @@ jobs:
           bash ../scripts/run-eval.sh qwen3:8b
           python3 ../scripts/eval-summary.py
 
-- name: Check eval pass rate
+      - name: Check eval pass rate
         run: |
           python3 -c "
           import json
