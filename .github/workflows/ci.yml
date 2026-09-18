@@ -67,12 +67,12 @@ jobs:
             sleep 5
           done
 
-      - name: Pull model (CPU)
+      - name: Pull model (CPU, small for CI)
         run: |
-          curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:8b"}'
+          curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:0.6b"}'
           # Wait for model to be ready
           for i in {1..30}; do
-            if curl -sf "http://localhost:11434/api/show?qwen3:8b" >/dev/null; then
+            if curl -sf "http://localhost:11434/api/show?qwen3:0.6b" >/dev/null; then
               echo "Model ready"
               break
             fi
@@ -122,14 +122,14 @@ jobs:
 
       - name: Pull model
         run: |
-          curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:8b"}'
+          curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:0.6b"}'
 
       - name: Run eval suite
         env:
           OLLAMA_URL: http://localhost:11434
         run: |
           cd eval
-          bash ../scripts/run-eval.sh qwen3:8b
+          bash ../scripts/run-eval.sh qwen3:0.6b
           python3 ../scripts/eval-summary.py
 
       - name: Check eval pass rate
