@@ -122,7 +122,7 @@ TOOLS = [
 ]
 
 
-def _urlopen(req, timeout=180):
+def _urlopen(req, timeout=300):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             raw = r.read()
@@ -134,7 +134,7 @@ def _urlopen(req, timeout=180):
         raise
 
 
-def _post(path, payload, timeout=180):
+def _post(path, payload, timeout=300):
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"{OLLAMA_URL}{path}",
@@ -144,7 +144,7 @@ def _post(path, payload, timeout=180):
     return _urlopen(req, timeout)
 
 
-def _get(path, timeout=180):
+def _get(path, timeout=300):
     req = urllib.request.Request(f"{OLLAMA_URL}{path}")
     return _urlopen(req, timeout)
 
@@ -218,7 +218,7 @@ def run_tool(name, args):  # noqa: PLR0911
         return f"TOOL-ERROR {name}: {e}"
 
 
-def _urlopen(req, timeout=180):
+def _urlopen(req, timeout=300):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             raw = r.read()
@@ -230,7 +230,7 @@ def _urlopen(req, timeout=180):
         raise
 
 
-def _post(path, payload, timeout=180):
+def _post(path, payload, timeout=300):
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"{OLLAMA_URL}{path}",
@@ -240,7 +240,7 @@ def _post(path, payload, timeout=180):
     return _urlopen(req, timeout)
 
 
-def _get(path, timeout=180):
+def _get(path, timeout=300):
     req = urllib.request.Request(f"{OLLAMA_URL}{path}")
     return _urlopen(req, timeout)
 
@@ -251,7 +251,7 @@ def complete(messages):
         "messages": messages,
         "tools": TOOLS,
         "stream": False,
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_predict": 2048, "num_ctx": 8192},
     }
     try:
         return _post("/v1/chat/completions", payload)

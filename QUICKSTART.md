@@ -54,6 +54,12 @@ RTX 5080, not CPU).
       -d '{"model":"qwen3:8b","messages":[{"role":"user","content":"Say hello to local agent"}]}' |
       python -c "import json,sys; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
 
+    # or from **Linux/WSL2 terminal** (recommended):
+    python3 agent_cli.py ask "What is 2+2?"
+    python3 agent_cli.py plan "Add health checks"
+    python3 agent_cli.py agent "Fix the syntax error"
+    python3 agent_cli.py agent --apply "Fix the syntax error in test_failing.py"
+
 ---
 
 ## 4. Scheduled night agent (the "works while you sleep" part)
