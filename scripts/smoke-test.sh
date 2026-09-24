@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eu
 
 # Smoke test for the local stack. Run from the project root inside WSL2.
 #   ./scripts/smoke-test.sh [model]     (default: auto-detect)

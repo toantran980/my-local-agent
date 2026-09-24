@@ -308,7 +308,7 @@ def post(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=180) as response:
+    with urllib.request.urlopen(request, timeout=300) as response:
         return json.load(response)
 
 

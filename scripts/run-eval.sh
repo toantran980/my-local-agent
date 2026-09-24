@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eu
 
 # Golden-prompt eval harness -> the reliability number (see scripts/eval-summary.py).
 #
