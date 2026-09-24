@@ -150,6 +150,33 @@ Tools: `list_projects`, `read_file`, `search`, `get_structure` — all read-only
 
 ---
 
+
+## Running the Agent (Linux/WSL2 Terminal)
+
+```bash
+# Start stack
+docker compose -f docker-compose.ci.yml up -d
+
+# Pull model (if not already)
+curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:0.6b"}"
+
+# Ask mode (read-only)
+python agent_cli.py ask "What is 2+2?"
+
+# Plan mode
+python agent_cli.py plan "Add health checks"
+
+# Agent mode (dry-run)
+python agent_cli.py agent "Fix the syntax error"
+
+# Agent mode with --apply (writes files after confirmation)
+python agent_cli.py agent --apply "Fix the syntax error in test_failing.py"
+
+# Interactive mode
+python agent_cli.py agent
+```
+
 ## License
+
 
 MIT — local-first, no cloud dependencies.
