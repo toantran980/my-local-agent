@@ -58,7 +58,7 @@ body = json.dumps({
     "model": model,
     "messages": [{"role": "user", "content": prompt}],
     "stream": False,
-    "options": {"temperature": 0},
+    "options": {"temperature": 0, "num_predict": 2048, "num_ctx": 8192},
 }).encode()
 req = urllib.request.Request(f"{url}/v1/chat/completions", data=body,
                              headers={"Content-Type": "application/json"})

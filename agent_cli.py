@@ -303,6 +303,10 @@ def system_prompt(mode: str, apply: bool) -> str:
 
 
 def post(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+    # Ensure sufficient context and output tokens to avoid truncation
+    payload.setdefault("options", {})
+    payload["options"].setdefault("num_predict", 2048)
+    payload["options"].setdefault("num_ctx", 8192)
     request = urllib.request.Request(
         url.rstrip("/") + "/v1/chat/completions",
         data=json.dumps(payload).encode("utf-8"),

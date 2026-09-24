@@ -251,7 +251,7 @@ def complete(messages):
         "messages": messages,
         "tools": TOOLS,
         "stream": False,
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_predict": 2048, "num_ctx": 8192},
     }
     try:
         return _post("/v1/chat/completions", payload)
