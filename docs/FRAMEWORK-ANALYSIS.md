@@ -9,6 +9,7 @@ Your current custom 400-line `agent_cli.py` could be enhanced with Hugging Face 
 ### What It Would Replace/Enhance
 
 **Current**: Direct Ollama API calls via `urllib.request`
+
 ```python
 # Current approach
 def post(url: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -22,6 +23,7 @@ def post(url: str, payload: dict[str, Any]) -> dict[str, Any]:
 ```
 
 **With HF Transformers**: Direct model loading and inference
+
 ```python
 # HF Transformers approach
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
@@ -58,6 +60,7 @@ result = generator(prompt, max_new_tokens=512, temperature=0.0)
 ### Implementation Approach
 
 **Option 1: HF + Custom API Server**
+
 ```python
 # hf_server.py - FastAPI wrapper
 from fastapi import FastAPI
@@ -77,6 +80,7 @@ async def chat_completions(request: ChatRequest):
 ```
 
 **Option 2: HF + Text Generation Inference (TGI)**
+
 ```yaml
 # Docker-based HF serving
 services:
@@ -97,12 +101,14 @@ services:
 ### Verdict for Your Setup
 
 **Keep Ollama for now** because:
+
 - Optimized for your RTX 5080 + WSL2 environment
 - Handles quantization, Flash Attention, KV cache automatically
 - Lower VRAM usage allows larger context or additional services
 - OpenAI-compatible API simplifies integration
 
 **Consider HF Transformers if**:
+
 - You need specific models not in Ollama
 - You want to experiment with quantization techniques
 - You're doing model fine-tuning or custom architectures
@@ -113,6 +119,7 @@ services:
 ### What It Would Replace
 
 **Current**: Custom tool calling loop in `agent_cli.py`
+
 ```python
 # Current custom approach
 for _ in range(MAX_TOOL_STEPS):
@@ -128,6 +135,7 @@ for _ in range(MAX_TOOL_STEPS):
 ```
 
 **With LangChain**: Structured agent framework
+
 ```python
 # LangChain approach
 from langchain.agents import create_tool_calling_agent, AgentExecutor
@@ -163,6 +171,7 @@ result = agent_executor.invoke({"input": user_prompt})
 ### Security Comparison
 
 **Your Current Approach**:
+
 ```python
 def _write_file(self, relative: str, content: str) -> str:
     path = resolve_repo_path(self.repo, relative)
@@ -174,6 +183,7 @@ def _write_file(self, relative: str, content: str) -> str:
 ```
 
 **LangChain ShellTool**:
+
 ```python
 # Less granular control
 from langchain_community.tools import ShellTool
@@ -184,6 +194,7 @@ shell_tool = ShellTool()
 ### Implementation Approach
 
 **Option 1: Gradual Migration**
+
 ```python
 # hybrid_agent.py - Mix custom and LangChain
 from langchain_ollama import ChatOllama
@@ -207,6 +218,7 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 ```
 
 **Option 2: Full LangChain**
+
 ```python
 # Full framework adoption
 from langchain.agents import create_openai_functions_agent
@@ -224,12 +236,14 @@ agent = create_openai_functions_agent(llm, tools, prompt)
 ### Verdict for Your Setup
 
 **Keep Custom for Core Security** because:
+
 - Your 400-line implementation is perfect for your use case
 - Security boundaries are explicit and debuggable
 - No unnecessary dependencies
 - You control every aspect of the execution loop
 
 **Consider LangChain if**:
+
 - You need 20+ different tool integrations quickly
 - You want to experiment with different agent patterns
 - You need cloud service integrations (AWS, GCP, etc.)
@@ -241,6 +255,7 @@ agent = create_openai_functions_agent(llm, tools, prompt)
 ### What It Would Enable
 
 **Current**: Single agent with Ask/Plan/Agent modes
+
 ```python
 # Your current linear flow
 def run_agent(mode, prompt, repo, model, url, apply):
@@ -251,6 +266,7 @@ def run_agent(mode, prompt, repo, model, url, apply):
 ```
 
 **With LangGraph**: Multi-agent workflows with state management
+
 ```python
 # LangGraph stateful multi-agent system
 from langgraph.graph import StateGraph, END
@@ -265,15 +281,15 @@ class AgentState(TypedDict):
 def triage_agent(state: AgentState):
     """Decides which specialist agent to use."""
     # Routing logic
-    
+  
 def code_agent(state: AgentState):
     """Handles code-related tasks."""
     # Code analysis, fixes
-    
+  
 def system_agent(state: AgentState):
     """Handles system operations."""
     # Docker, configs, monitoring
-    
+  
 def supervisor_agent(state: AgentState):
     """Coordinates between agents."""
     # Decision gates, approval flows
@@ -316,6 +332,7 @@ app = workflow.compile()
 ### Implementation Approach
 
 **Option 1: Simple Multi-Agent**
+
 ```python
 # Simple specialist agents
 from langgraph.graph import StateGraph
@@ -336,6 +353,7 @@ workflow.add_conditional_edges("router", router)
 ```
 
 **Option 2: Complex Workflow with Human Approval**
+
 ```python
 # Complex workflow with approval gates
 def code_fix_proposal(state):
@@ -362,12 +380,14 @@ workflow.add_conditional_edges("approve", human_approval)
 ### Verdict for Your Setup
 
 **Skip LangGraph for Now** because:
+
 - Your current nightly triage is a simple single-agent workflow
 - Your Ask/Plan/Agent modes cover the necessary patterns
 - State management complexity not justified yet
 - You can add it later if workflows become complex
 
 **Consider LangGraph if**:
+
 - You need multi-agent specialist teams
 - You want complex approval workflows
 - You need long-running, resumable tasks
@@ -377,12 +397,14 @@ workflow.add_conditional_edges("approve", human_approval)
 ## Hybrid Architecture Recommendation
 
 ### Phase 1: Keep Current Core (Recommended)
+
 - **Keep**: Custom `agent_cli.py` for security and control
 - **Keep**: Ollama for optimized inference
 - **Keep**: Your MCP servers for tools
 - **Add**: Gradual experimentation in parallel
 
 ### Phase 2: Targeted Framework Adoption
+
 ```python
 # hybrid_approach.py - Best of both worlds
 from langchain_ollama import ChatOllama
@@ -397,11 +419,11 @@ class SecureLocalTools:
         self.repo = repo
         self.apply = apply
         # Your existing security logic
-    
+  
     def read_file(self, path):
         # Your path resolution, sensitive file checks
         pass
-    
+  
     def write_file(self, path, content):
         # Your write safety, diff confirmation
         pass
@@ -422,13 +444,14 @@ class SecureAgent:
     def __init__(self, repo, apply):
         self.tools = SecureLocalTools(repo, apply)
         self.llm = ChatOllama(model="qwen3:8b")
-    
+  
     def run(self, prompt):
         # Your custom tool loop with security
         pass
 ```
 
 ### Phase 3: Framework for Complex Workflows
+
 ```python
 # Use LangGraph only when workflows become complex
 from langgraph.graph import StateGraph
@@ -447,6 +470,7 @@ def complex_workflow(task):
 ### If You Want to Experiment
 
 1. **Create parallel setup**:
+
 ```bash
 # Keep your current setup
 docker compose up -d  # Your current stack
@@ -457,12 +481,13 @@ pip install langchain langchain-ollama langgraph
 ```
 
 2. **Benchmark comparison**:
+
 ```python
 # Compare approaches
 def compare_approaches(task):
     custom_result = custom_agent.run(task)
     langchain_result = langchain_agent.run(task)
-    
+  
     return {
         "custom": {"time": custom_time, "result": custom_result},
         "langchain": {"time": langchain_time, "result": langchain_result}
@@ -470,6 +495,7 @@ def compare_approaches(task):
 ```
 
 3. **Evaluate based on metrics**:
+
 - Development time
 - Performance (latency, VRAM)
 - Reliability
@@ -479,6 +505,7 @@ def compare_approaches(task):
 ### If You Want Full Migration
 
 1. **Start with LangChain tools only**:
+
 ```python
 # Replace tool definitions with LangChain tools
 from langchain_community.tools import ReadFileTool, WriteFileTool
@@ -486,6 +513,7 @@ tools = [ReadFileTool(), WriteFileTool()]
 ```
 
 2. **Gradually replace agent loop**:
+
 ```python
 # Replace your tool-calling loop with LangChain agent
 from langchain.agents import create_tool_calling_agent
@@ -493,6 +521,7 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 ```
 
 3. **Add LangGraph for complex workflows**:
+
 ```python
 # Only if you need multi-agent coordination
 from langgraph.graph import StateGraph
@@ -502,6 +531,7 @@ workflow = StateGraph(AgentState)
 ## Decision Framework
 
 ### Keep Custom If:
+
 - ✅ You value understanding fundamentals
 - ✅ Security is your top priority
 - ✅ You want minimal dependencies
@@ -509,6 +539,7 @@ workflow = StateGraph(AgentState)
 - ✅ You're building for learning/resume
 
 ### Adopt Frameworks If:
+
 - ✅ You need rapid prototyping
 - ✅ You want ecosystem integrations
 - ✅ You need diverse tool sets
@@ -516,6 +547,7 @@ workflow = StateGraph(AgentState)
 - ✅ You want built-in observability
 
 ### Hybrid Approach If:
+
 - ✅ You want control over core security
 - ✅ You need framework features for specific tasks
 - ✅ You want to gradually adopt complexity
@@ -532,6 +564,7 @@ workflow = StateGraph(AgentState)
 5. **Future Flexibility**: You can add frameworks later if needed
 
 **Experimental Path**:
+
 ```bash
 # Create experimental branch
 git checkout -b experiment-frameworks
@@ -549,6 +582,7 @@ python compare_approaches.py
 ```
 
 **Framework Adoption Triggers**:
+
 - You need 10+ different tool integrations
 - You want to experiment with different agent patterns
 - You need cloud service integrations
