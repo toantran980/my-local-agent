@@ -1,262 +1,296 @@
-# my-local-agent — Local Autonomous Triage Stack
+# my-local-agent
 
-A self-hosted, local-first AI agent stack running on NVIDIA RTX 5080 (16GB) via WSL2 + Docker Desktop.
+Local-first AI agent stack. Ollama for inference, Open WebUI for chat, an MCP
+bridge for tools, and a nightly triage job that writes a report while you sleep.
+Everything runs on one machine — no cloud calls, no API keys.
 
-## Quickstart
+Built for a single NVIDIA RTX 5080 (16GB) under WSL2 + Docker Desktop.
 
-```bash
-# 1. Start stack (one-time model pull ~5–6 GB)
-wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && docker compose up -d --build'
-
-# 2. Verify
-wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/smoke-test.sh'
-# Expect: SMOKE: PASS + GPU row (qwen3:8b on VRAM)
-
-# 3. Chat
-start http://localhost:3000
-# or API: curl -s http://localhost:11434/v1/chat/completions -H "Content-Type: application/json" -d '{"model":"qwen3:8b","messages":[{"role":"user","content":"Hello"}]}'
-```
-
----
-
-## Scheduled Nightly Agent
-
-```bash
-# Install 5 PM daily cron (waits for Ollama, logs cleanly if Docker down)
-wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/install-cron.sh'
-
-# Run once now
-wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(ROOT)}" && bash scripts/run-nightly.sh'
-```
-
-Reports appear in `reports/YYYY-MM-DD.md`. Set `DRAFT_PR=1 GH_REPO=owner/repo` for draft PRs.
-
----
-
-## Reliability Harness
-
-```bash
-wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/run-eval.sh && python3 scripts/eval-summary.py'
-# Expect: 6/6 passed
-```
+**Start here:** [QUICKSTART.md](QUICKSTART.md) for the 60-second version.
 
 ---
 
 ## Architecture
 
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| Ollama | `ollama/ollama:latest` | 11434 | Local LLM (qwen3:8b, 100% VRAM) |
-| mcpo | `my-local-agent-mcpo` | 8000 | MCP→OpenAPI bridge |
-| Open WebUI | `ghcr.io/open-webui/open-webui:main` | 3000 | Chat UI |
-| auth_proxy | `caddy:latest` | 8443 | Auth proxy (opt-in) |
-| vllm | `vllm/vllm-openai:latest` | 8001 | High-throughput (opt-in) |
-
----
-
-## MCP Tools (via mcpo)
-
-| Tool | Purpose |
-|------|---------|
-| `filesystem` | Read/write in `/workspace` |
-| `fetch` | HTTP requests |
-| `local_ops` | `git_status`, `grep`, `gpu_status`, `models_list`, `projects_overview`, `configs_overview`, `system_status`, `sandbox_files`, `eval_history` |
-| `projects_ops` | Safe project access: `list_projects`, `read_file`, `search`, `get_structure` |
-
----
-
-## Requirements
-
-- Windows 10/11 + **Docker Desktop** (WSL2 backend)
-- NVIDIA RTX 5080 (16GB) + Windows GPU driver
-- WSL2 distro (Ubuntu 26.04 recommended)
-- `wsl` command in PATH
-
----
-
-## Portable Paths
-
-Set `MY_LOCAL_AGENT_ROOT` to your repo root (WSL path):
-
-```bash
-export MY_LOCAL_AGENT_ROOT="/mnt/c/Users/yourname/my-local-agent"
-# or auto-detect:
-export MY_LOCAL_AGENT_ROOT="$(pwd)"
+```
+Windows host
+└── WSL2 (Ubuntu)
+    └── Docker Desktop
+        ├── ollama        :11434   inference (qwen3:8b, 100% VRAM)
+        ├── open-webui    :3000    chat UI
+        ├── mcpo          :8000    MCP → OpenAPI bridge
+        ├── auth_proxy    :8443    Caddy + basic auth   (profile: auth)
+        └── local_vllm    :8001    high-throughput AWQ  (profile: vllm)
 ```
 
-All commands use `${MY_LOCAL_AGENT_ROOT:-$(pwd)}` — no hardcoded paths.
+| Service | Container | Port | Image | Purpose |
+|---|---|---|---|---|
+| Ollama | `local_ollama` | 11434 | `ollama/ollama:latest` | Local inference |
+| Open WebUI | `open-webui` | 3000 | `ghcr.io/open-webui/open-webui:main` | Chat UI |
+| mcpo | `mcpo` | 8000 | built from `./mcpo` | MCP → OpenAPI bridge |
+| auth_proxy | `auth_proxy` | 8443 | `caddy:latest` | TLS + basic auth (opt-in) |
+| local_vllm | `local_vllm` | 8001 | `vllm/vllm-openai:latest` | High-throughput serving (opt-in) |
+
+Every port binds to `127.0.0.1`. Nothing is exposed to the LAN.
 
 ---
 
-## GPU Verification
+## MCP tools
+
+mcpo exposes four MCP servers, defined in [`mcpo/config.json`](mcpo/config.json).
+
+| Server | Mounted at | Tools |
+|---|---|---|
+| `filesystem` | `/workspace` | Official Node MCP filesystem server, scoped to the sandbox |
+| `fetch` | — | `mcp-server-fetch` (HTTP requests) |
+| `local_ops` | [`mcp/local_ops.py`](mcp/local_ops.py) | `git_state`, `gpu_status`, `system_status`, `projects_overview`, `configs_overview`, `sandbox_files`, `eval_history`, `latest_nightly_report` |
+| `projects_ops` | [`mcp/projects_ops.py`](mcp/projects_ops.py) | `list_projects`, `list_project_files`, `get_project_structure`, `read_project_file`, `search_projects` |
+
+Mounted host paths inside `mcpo`: the repo at `/repo` (read-only), `./workspace`
+at `/workspace`, `./eval` at `/data/eval`, `./agent-reports` at
+`/data/agent-reports`. See [PROJECTS.md](PROJECTS.md) to enable `/projects`,
+`/configs`, and `/logs`.
+
+Register them in Open WebUI: **Admin Panel → Settings → Integrations →
+External Tool Servers →** `http://mcpo:8000/<server-name>` for each of the four.
+
+---
+
+## Agent CLI
+
+[`agent_cli.py`](agent_cli.py) is a dependency-free terminal agent that talks to
+Ollama's OpenAI-compatible API. Three modes, one flag that unlocks writes.
 
 ```bash
-# Inside WSL2
-nvidia-smi
-# Then inside Docker:
+python3 agent_cli.py ask "What is 2+2?"                    # read-only
+python3 agent_cli.py plan "Add health checks"               # plan, no writes
+python3 agent_cli.py agent "Fix the syntax error"           # dry-run patch
+python3 agent_cli.py agent --apply "Fix the syntax error"   # writes under --repo
+python3 agent_cli.py agent                                 # interactive
+```
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--repo` | cwd | Only directory `--apply` may write to |
+| `--model` | `$AGENT_MODEL` or `qwen3:8b` | |
+| `--url` | `$OLLAMA_URL` or `http://localhost:11434` | |
+| `--apply` | off | Permits writes in agent mode; requires confirmation |
+
+Safety rails, all enforced in code: max 10 tool steps per run, 32KB read cap,
+sensitive paths (`.env`, keys, certs) blocked, credentials redacted before audit.
+
+Every run appends structured JSONL to `.agent/audit/<date>.jsonl` — prompts,
+decisions, tool calls, retries, verification, approvals. Inspect one with:
+
+```bash
+python3 scripts/tail-audit.py
+```
+
+---
+
+## Nightly triage
+
+[`scripts/nightly-triage.py`](scripts/nightly-triage.py) runs a bounded tool loop —
+`git_status`, `grep`, `gpu_status`, `models_list`, `read_file`, `write_report` —
+then writes `reports/YYYY-MM-DD.md`.
+
+```bash
+bash scripts/install-cron.sh     # 5 PM daily; override with CRON_HOUR / CRON_MIN
+bash scripts/run-nightly.sh      # run once now (waits up to 5 min for Ollama)
+crontab -l | grep my-local-agent-nightly-triage
+```
+
+Set `DRAFT_PR=1` plus `GH_REPO=owner/repo` to also open a draft PR per report.
+
+> **Note:** the nightly job writes to `reports/`, but `mcpo` mounts
+> `./agent-reports` at `/data/agent-reports`. The `latest_nightly_report` tool
+> therefore reads an empty directory. Reports are still readable on the host.
+
+---
+
+## Evaluation
+
+Six golden-prompt cases in [`eval/cases/`](eval/cases) with fixtures in
+`eval/fixtures/`, run through Ollama at `temperature: 0`. Failures exit non-zero,
+so the harness is CI-usable.
+
+```bash
+bash scripts/run-eval.sh              # default model: ollama/qwen3:8b
+bash scripts/run-eval.sh ollama/qwen3:0.6b
+python3 scripts/eval-summary.py       # per-day, per-model pass-rate table
+```
+
+Each run appends `{ts, model, passed, total}` to `eval/history.jsonl` — the
+reliability trend over time.
+
+CI (`.github/workflows/ci.yml`) runs `ruff check .`, `shellcheck scripts/*.sh`,
+and `pytest`.
+
+---
+
+## Configuration
+
+Copy `.env.example` to `.env`. All values have defaults.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MY_LOCAL_AGENT_ROOT` | cwd | Repo root as a WSL path; no hardcoded paths anywhere |
+| `OLLAMA_URL` | `http://localhost:11434` | Inference endpoint |
+| `AGENT_MODEL` | `qwen3:8b` | Model for `agent_cli.py` |
+| `NIGHTLY_MODEL` | `qwen3:8b` | Model for nightly triage |
+| `CRON_HOUR` / `CRON_MIN` | `17` / `0` | Nightly schedule |
+| `DRAFT_PR` / `GH_REPO` | `0` / — | Draft PR automation |
+| `ADMIN_USER` / `ADMIN_PASSWORD` | `admin` / `changeme` | auth_proxy credentials — **change these** |
+| `OLLAMA_CONTEXT_LENGTH` | `16384` | KV ceiling per request |
+
+### VRAM budget (16GB)
+
+| Model | Weights + KV @ 16k ctx | Verdict |
+|---|---|---|
+| `qwen3:8b` | ~7GB | Default; comfortable |
+| `qwen3:14b` | ~11GB | Fits, keep context at 16k |
+| `qwen3:30b` | — | Does not fit; not supported |
+
+Rule of thumb: weights + KV + 1GB headroom must stay under ~14.5GB.
+
+---
+
+## Makefile shortcuts
+
+```bash
+make up          make down        make ps          make logs
+make smoke       make gpu         make eval        make eval-history
+make cron-install make cron-run   make cron-logs   make report-latest
+make agent-ask 'question'        make agent-plan 'task'
+make agent-dry 'task'            make agent-apply 'task'
+make help
+```
+
+---
+
+## Troubleshooting
+
+**GPU not detected in Docker**
+
+```bash
+nvidia-smi   # works in WSL2?
 docker run --rm --gpus all nvidia/cuda:12.8.0-runtime-ubuntu24.04 nvidia-smi
 ```
 
-If Docker test fails, register NVIDIA runtime:
+If the second fails, install the NVIDIA container toolkit and register the
+runtime, then fully quit and relaunch Docker Desktop:
+
 ```bash
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
 sudo nvidia-ctk runtime configure --runtime=docker
-# Fully quit & relaunch Docker Desktop (Windows)
 ```
 
----
-
-## Optional Profiles
-
-```bash
-# Auth proxy (Caddy + basic auth + TLS)
-docker compose --profile auth up -d auth_proxy
-# Set ADMIN_USER / ADMIN_PASSWORD in .env first
-
-# vLLM (high-throughput, AWQ model)
-docker compose --profile vllm up -d vllm
-# Endpoint: http://localhost:8001/v1
-```
+| Symptom | Fix |
+|---|---|
+| `docker: command not found` | Start Docker Desktop — it provides the CLI in WSL2 |
+| `connection refused :11434` | Stack not up yet; re-run `make up`, allow ~30s for Ollama |
+| Smoke test has no GPU row | Model still pulling; re-run `make up` |
+| WebUI slow on first load | Cold start; retry after ~1 min |
+| Cron reports missing | `service cron start`, then re-run `make cron-install` |
+| `make` targets no-op | Run from WSL2, or use the `wsl bash -lc '...'` form in the Makefile |
 
 ---
 
-## Project Access (projects_ops)
+## Documentation map
 
-1. `./setup-projects.sh` (creates `~/projects`, `~/configs`, `~/logs`)
-2. `docker compose up -d --force-recreate mcpo`
-3. Add `projects_ops` in Open WebUI: `http://mcpo:8000/projects_ops`
-
-Tools: `list_projects`, `read_file`, `search`, `get_structure` — all read-only, path-safe.
-
----
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Stack definition |
-| `scripts/smoke-test.sh` | Health check (Ollama, mcpo, GPU) |
-| `scripts/run-eval.sh` | Eval harness (6 cases) |
-| `scripts/nightly-triage.py` | Nightly agent |
-| `scripts/run-nightly.sh` | Cron wrapper (waits for Ollama) |
-| `scripts/install-cron.sh` | Installs 5 PM cron |
-| `agent_cli.py` | Interactive Ask/Plan/Agent CLI |
-| `eval/cases/*.json` | Eval test cases |
-| `eval/fixtures/` | Test fixtures |
-| `reports/` | Nightly reports |
-| `Makefile` | Shortcuts (`make up`, `make eval`, `make cron-run`, etc.) |
+| File | Read it when |
+|---|---|
+| [QUICKSTART.md](QUICKSTART.md) | Setting up from scratch |
+| [PROJECTS.md](PROJECTS.md) | Granting the agent read access to `~/projects` |
+| [AGENTS.md](AGENTS.md) | Working on this repo with an AI agent |
+| [docs/FRAMEWORK-ANALYSIS.md](docs/FRAMEWORK-ANALYSIS.md) | Evaluating LangChain/LangGraph vs. the current hand-rolled loop |
+| [workspace/README.md](workspace/README.md) | Understanding the agent's file sandbox |
 
 ---
-
-
-## Running the Agent (Linux/WSL2 Terminal)
-
-```bash
-# Start stack
-docker compose -f docker-compose.ci.yml up -d
-
-# Pull model (if not already)
-curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:0.6b"}"
-
-# Ask mode (read-only)
-python agent_cli.py ask "What is 2+2?"
-
-# Plan mode
-python agent_cli.py plan "Add health checks"
-
-# Agent mode (dry-run)
-python agent_cli.py agent "Fix the syntax error"
-
-# Agent mode with --apply (writes files after confirmation)
-python agent_cli.py agent --apply "Fix the syntax error in test_failing.py"
-
-# Interactive mode
-python agent_cli.py agent
-```
-
 
 ## Roadmap
 
-## Product goal
+### Product goal
 
-Build a local-first autonomous triage platform that turns signals such as
-telemetry, configuration drift, and failing checks into evidence-backed,
-human-approved changes. The agent may propose and verify a change, but a human
-approves every merge.
+Turn signals — telemetry, config drift, failing checks — into evidence-backed,
+human-approved changes. The agent proposes and verifies; a human approves every
+merge.
 
-\signals/configs -> triage agent -> scoped tools -> audit trail
-                                      |
-                                      v
-                              tests and verification
-                                      |
-                                      v
-                            draft PR -> human approval -> metrics
-\
-## Guiding principles
+```
+signals / config drift
+        │
+        ▼
+  triage agent ──▶ scoped tools ──▶ audit trail
+        │
+        ▼
+  tests + verification
+        │
+        ▼
+  draft PR ──▶ human approval ──▶ metrics
+```
 
-- Local Ollama is the default inference route; cloud fallback is explicit.
-- Start read-only and grant narrowly scoped write capabilities only after
-  evaluation proves they are reliable.
-- Every agent action must have structured, durable audit data.
-- A passing verification suite and a draft PR are required before a proposed
-  change can reach human review.
-- Optimize inference infrastructure only after outcome metrics identify a
-  bottleneck.
+### Guiding principles
 
-## Current status (as of 2026-09-17)
+- Local Ollama is the default inference route; cloud fallback is explicit opt-in.
+- Start read-only; grant narrow write scopes only after evals prove them reliable.
+- Every agent action leaves structured, durable audit data.
+- A passing verification suite and a draft PR are required before human review.
+- Optimize inference infrastructure only after metrics identify a bottleneck.
 
-**Milestone 1 — Production agent harness: COMPLETE**
+### Milestones
 
-- Task schema with ID, source, repo, policy, model, lifecycle state, correlation ID
+**1 — Production agent harness: COMPLETE**
+
+- Task schema: ID, source, repo, policy, model, lifecycle state, correlation ID
 - Tool registry: read, write, shell, git, network, PR creation
 - Per-task permissions, path allowlists, command allowlists, output caps, timeouts
 - JSONL audit for prompts, decisions, tool calls, retries, verification, approvals
-- Bounded retries with exponential backoff; terminal states: succeeded/needs_review/failed/blocked
-- Draft-PR gate: patch on dedicated branch -> verification -> draft PR -> human approval
+- Bounded retries with exponential backoff; terminal states
+  `succeeded` / `needs_review` / `failed` / `blocked`
+- Draft-PR gate: branch → verify → draft PR → human approval
 
-**Milestone 2 — Evaluation and reliability: COMPLETE**
+**2 — Evaluation and reliability: COMPLETE**
 
-- Eval suite: eval/cases/, eval/fixtures/, eval/history.jsonl
-- Detection, diagnosis, patch, verification cases separated
-- Records model, policy version, latency, retries, outcome per run
-- Failed eval cases exit non-zero
-- Metrics: detection precision/recall, fix success rate, verification pass rate, false-positive rate, rollback rate, human approval rate
-- Regression thresholds block promotion of changed policy/model
-- **Current:** eval 6/6 passing, history tracked
+- Six cases split across detection, diagnosis, patch, and verification
+- Per-run records of model, policy version, latency, retries, outcome
+- Failed cases exit non-zero
+- Tracked metrics: detection precision/recall, fix success rate, verification
+  pass rate, false-positive rate, rollback rate, human approval rate
+- Regression thresholds block promotion of a changed policy or model
 
-**Milestone 3 — Scheduled triage: OPERATIONAL**
+**3 — Scheduled triage: OPERATIONAL**
 
-- Cron at 5 PM daily (0 17 * * *) via scripts/install-cron.sh
-- Waits for Ollama (up to 5 min), logs cleanly if Docker/Ollama down
-- Writes reports/YYYY-MM-DD.md with git status, GPU status, model list, grep findings
-- Cron wrapper: scripts/run-nightly.sh (waits up to 5 min for Ollama API)
-- Reports in reports/
+- Cron at 5 PM daily via `scripts/install-cron.sh`
+- Waits up to 5 min for Ollama; logs cleanly when Docker is down
+- Writes `reports/YYYY-MM-DD.md` with git state, GPU, model list, grep findings
 
-## Next slice (immediate)
+### Next slice
 
-Implement the production harness around one controlled workflow:
+One controlled workflow, end to end:
 
-> Given a known failing test or configuration drift, collect evidence, propose
-> the smallest safe patch in an isolated worktree, run verification, write an
-> audit trail, and open a draft PR for human approval.
+> Given a known failing test or config drift, collect evidence, propose the
+> smallest safe patch in an isolated worktree, run verification, write an audit
+> trail, and open a draft PR for human approval.
 
-This is the smallest end-to-end proof. It gives evaluation, sensor pipeline,
-model router, and vLLM work a stable foundation.
+This is the smallest end-to-end proof, and it gives the eval harness, sensor
+pipeline, model router, and vLLM work a stable foundation.
 
----
+### Deferred
 
-## Future milestones (deferred until current slice is solid)
-
-- **Milestone 4** — Model router and fallback policy (Ollama default, cloud opt-in)
-- **Milestone 5** — vLLM deployment for RTX 5080 (only if measurements justify)
-- **Sensor triage pipeline** — telemetry adapters, drift rules, evidence bundles
-- **Multimodal vision** — Qwen2-VL via vLLM (only if use case justifies VRAM cost)
+- Model router with explicit cloud fallback policy
+- vLLM on the 5080, only if measurements justify the VRAM cost
+- Sensor triage pipeline: telemetry adapters, drift rules, evidence bundles
+- Multimodal vision (Qwen2-VL), only if the use case justifies the VRAM
 
 ---
 
 ## License
 
-
-MIT — local-first, no cloud dependencies.
+[MIT](LICENSE) — local-first, no cloud dependencies. The container images this
+stack pulls (Ollama, Open WebUI, vLLM) carry their own licenses and are not
+redistributed under this one.

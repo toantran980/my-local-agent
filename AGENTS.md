@@ -1,53 +1,88 @@
-# Local Agent Project - AI Agent Context
+# AGENTS.md
 
-## Project Overview
-This is a self-hosted local AI agent stack running on NVIDIA RTX 5080 with WSL2 + Docker Desktop. The stack uses Ollama for inference, Open WebUI for chat interface, and MCP tools for filesystem and web operations.
+Context for AI agents working in this repo. Human-facing docs live in
+[README.md](README.md), [QUICKSTART.md](QUICKSTART.md), and
+[PROJECTS.md](PROJECTS.md).
 
-## Key Components
-- **Ollama**: Local inference engine (qwen3:8b default, qwen3:14b optional)
-- **Open WebUI**: Chat UI at http://localhost:3000
-- **mcpo**: MCP-to-OpenAPI bridge for tool integration
-- **agent_cli.py**: Terminal interface with Ask/Plan/Agent modes
-- **nightly-triage.py**: Scheduled agent for repository triage
-- **projects_ops**: Custom MCP server for safe project directory access
+## What this is
 
-## Verification Commands
-- `docker compose ps` - Check service status
-- `docker exec local_ollama ollama ps` - Verify GPU usage
-- `./scripts/smoke-test.sh` - Automated smoke test
-- `python3 -m pytest -q` - Run tests (requires .agent-venv)
+Self-hosted local AI agent stack on an NVIDIA RTX 5080 (16GB) via WSL2 + Docker
+Desktop. Ollama for inference, Open WebUI for chat, an MCP bridge for tools, and
+a nightly triage job.
 
-## Build/Test Commands
-- `docker compose up -d --build` - Build and start services
-- `docker exec local_ollama ollama pull qwen3:8b` - Pull model
-- `./scripts/run-eval.sh` - Run evaluation suite
-- `python3 scripts/eval-summary.py` - View eval results
+## Layout
 
-## Project Structure
-- `agent_cli.py` - Main terminal agent interface
-- `mcp/local_ops.py` - Custom MCP server for operations
-- `scripts/` - Utility scripts (nightly triage, eval, cron)
-- `eval/` - Evaluation cases and fixtures
-- `tests/` - Unit tests for agent CLI
-- `workspace/` - Agent file sandbox
-- `agent-reports/` - Daily triage reports
+| Path | Contents |
+| --- | --- |
+| `agent_cli.py` | Terminal agent: `ask` / `plan` / `agent` modes |
+| `mcp/local_ops.py` | MCP server: git, GPU, system, eval introspection |
+| `mcp/projects_ops.py` | MCP server: read-only project file access |
+| `mcpo/` | MCP→OpenAPI bridge image + `config.json` (4 servers) |
+| `scripts/` | smoke test, eval harness, nightly triage, cron, audit viewer |
+| `eval/` | `cases/*.json`, `fixtures/`, `history.jsonl` |
+| `tests/` | pytest suite for `agent_cli.py` |
+| `reports/` | Nightly triage output, `YYYY-MM-DD.md` (gitignored) |
+| `agent-reports/` | Mounted into `mcpo` at `/data/agent-reports` (gitignored) |
+| `.agent/audit/` | Per-run JSONL audit trail (gitignored) |
+| `workspace/` | Agent file sandbox, the only writable MCP mount |
+| `docs/` | Framework analysis, not operational docs |
 
-## Environment Variables
-- `OLLAMA_URL` - Ollama endpoint (default: http://localhost:11434)
-- `AGENT_MODEL` - Model for agent_cli.py (default: qwen3:8b)
-- `NIGHTLY_MODEL` - Model for nightly triage (default: qwen3:8b)
-- `DRAFT_PR=1` - Enable draft PR creation for nightly reports
-- `GH_REPO` - GitHub repo for draft PRs
+`reports/` and `agent-reports/` are distinct. The nightly job writes to
+`reports/`; `mcpo` mounts `agent-reports/`. As a result the `local_ops`
+`latest_nightly_report` tool reads an empty directory — known inconsistency.
 
-## Key Constraints
-- All services bind to localhost only (no authentication on Ollama API)
-- Agent writes restricted to --repo directory with --apply flag
-- Sensitive files (.env, keys, etc.) are protected from read/write
-- File operations limited to 32KB for safety
-- Maximum 10 tool steps per agent run
+## Commands
 
-## VRAM Budget (16GB card)
-- qwen3:8b fits comfortably at ~7GB total (32k context)
-- qwen3:14b fits at ~11GB (cap context at 32k)
-- qwen3:30B barely fits, not recommended
-- Rule: weights + KV + 1GB headroom must stay under ~14.5GB
+```bash
+make up / down / ps / logs      # stack lifecycle
+make smoke                      # health check: ollama, mcpo, GPU residency, agent_cli
+make gpu                        # model VRAM residency
+make eval                       # 6-case eval suite + summary
+make eval-history               # pass-rate trend
+make cron-install / cron-run    # nightly triage
+make agent-ask 'question'       # read-only
+make agent-apply 'task'         # writes under --repo
+
+bash scripts/smoke-test.sh      # same checks without make
+python3 -m pytest -q           # unit tests
+ruff check . && shellcheck scripts/*.sh    # what CI runs
+```
+
+Direct equivalents, e.g. `docker exec local_ollama ollama ps` for GPU residency
+and `docker exec local_ollama ollama pull qwen3:8b` to fetch a model.
+
+## Environment
+
+`OLLAMA_URL` (default `http://localhost:11434`), `AGENT_MODEL` and
+`NIGHTLY_MODEL` (default `qwen3:8b`), `CRON_HOUR` / `CRON_MIN` (17 / 0),
+`DRAFT_PR` and `GH_REPO` for draft PRs, `ADMIN_USER` / `ADMIN_PASSWORD` for the
+auth proxy. Full table in [README.md](README.md#configuration).
+
+## Constraints
+
+Do not violate these — they are enforced in code:
+
+- Services bind to `127.0.0.1` only. Ollama's API has no auth.
+- `agent_cli.py` writes only under `--repo`, and only with `--apply`.
+- Max 10 tool steps per run (`MAX_TOOL_STEPS` in `agent_cli.py`).
+- 32KB read cap (`MAX_FILE_BYTES`); 1MB write cap.
+- Sensitive paths (`.env`, keys, certs) are blocked from read and write.
+- Credentials are redacted before anything is written to the audit log.
+- `projects_ops` is read-only; `/projects`, `/configs`, `/logs` mount `:ro`.
+
+## VRAM (16GB card)
+
+`qwen3:8b` ~7GB at 16k context (default), `qwen3:14b` ~11GB and fits, 30B does
+not. Weights + KV + 1GB headroom must stay under ~14.5GB.
+`OLLAMA_CONTEXT_LENGTH=16384` is the compose default and the KV ceiling.
+
+## Conventions
+
+- `ruff` with `line-length = 100`, `target-version = "py314"`, double quotes.
+- `agent_cli.py` is deliberately dependency-free (stdlib `urllib` only). Do not
+  add third-party imports to it.
+- `scripts/nightly-triage.py` is stdlib-only for the same reason.
+- Eval cases are cwd-independent: fixture contents are inlined into the prompt.
+- The eval harness talks to Ollama directly rather than shelling out to
+  `opencode run`, because the `opencode` on PATH here is the Desktop app binary
+  and emits no stdout when headless.

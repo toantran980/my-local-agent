@@ -1,230 +1,170 @@
-# Project Access via MCP (`projects_ops`)
+# Project access (`projects_ops`)
 
-A read-only MCP server providing secure, structured access to your project directories via structured tools.
+`projects_ops` ([`mcp/projects_ops.py`](mcp/projects_ops.py)) is a read-only MCP
+server that gives the agent structured, path-safe access to your project
+directories. This is opt-in: the volumes are commented out in
+`docker-compose.yml` until you enable them.
 
----
-
-## What's Implemented
-
-### Safe Project Access (`projects_ops` MCP Server)
-A read-only MCP server providing secure access to your project directories:
-
-- **Path traversal protection** — all paths resolved relative to base dirs
-- **Sensitive file filtering** — blocks `.env`, keys, certs, etc.
-- **File size limits** — 32KB read cap
-- **Directory exclusions** — `.git`, `node_modules`, `__pycache__`, etc.
-- **Structured project exploration** — list, read, search, tree view
-
-### Enhanced Docker Configuration
-- Read-only volume mounts for project/config/log directories
-- Authentication proxy ready (Caddy, opt-in)
-- Security-first networking (localhost-only by default)
-
-### Enhanced `local_ops` Tools
-- `projects_overview()` — view available projects
-- `configs_overview()` — view config files
-- `system_status()` — overall system health
-- `gpu_status()` — GPU/model VRAM residency
+Related: [README.md](README.md) for the full stack,
+[QUICKSTART.md](QUICKSTART.md) for first-time setup.
 
 ---
 
-## Setup
+## 1. Create the directories
 
-### 1. Create directories on Windows host
 ```bash
-# In WSL2
 cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}"
 chmod +x setup-projects.sh
 ./setup-projects.sh
-# Choose option 2 (Windows filesystem)
 ```
 
-Creates:
-- `C:\Users\<your-username>\projects\` — project directories
-- `C:\Users\<your-username>\configs\` — config files
-- `C:\Users\<your-username>\logs\` — log files
+The script prompts for a location — Linux filesystem (WSL2-native, faster) or
+Windows filesystem (slower, but reachable from Explorer) — and creates three
+directories under it:
 
-### 2. Docker volumes (already in `docker-compose.yml`)
+```
+<base>/
+├── projects/    your project directories
+├── configs/     config files
+└── logs/        log files
+```
+
+It also drops a sample project, config, and log file so you can verify access
+end to end.
+
+## 2. Enable the volumes
+
+Uncomment the three mounts in the `mcpo` service in `docker-compose.yml`. They
+mount read-only (`:ro`):
+
 ```yaml
 volumes:
   - ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/projects:/projects:ro
   - ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/configs:/configs:ro
   - ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/logs:/logs:ro
-  - ./mcpo/config.json:/config/config.json:ro
 ```
 
-### 3. Recreate mcpo to pick up config
+Pick the default that matches your choice in step 1 — the Linux-native default
+won't resolve on a Windows-host setup, and vice versa.
+
+## 3. Restart mcpo and register the tools
+
 ```bash
 docker compose up -d --force-recreate mcpo
 ```
 
-### 4. Add tools in Open WebUI
-1. Admin Panel → Settings → Integrations → External Tool Servers
-2. Add OpenAPI server:
-   - Name: `projects_ops`
-   - URL: `http://mcpo:8000/projects_ops`
-3. Enable in chat sessions
+Then in Open WebUI: **Admin Panel → Settings → Integrations → External Tool
+Servers**, add `http://mcpo:8000/projects_ops`, and enable it in your chat
+sessions (tools icon, top right).
 
-### 5. Test (CLI)
+## 4. Verify
+
 ```bash
-# Verify mcpo sees tools
+./test-projects-ops.sh
+```
+
+Or by hand:
+
+```bash
+# Confirm mcpo sees the tools
 curl -s http://localhost:8000/openapi.json | grep projects_ops
 
-# Test file access
+# Read a file
 curl -X POST http://localhost:8000/projects_ops/read_project_file \
   -H "Content-Type: application/json" \
   -d '{"project": "", "file_path": "README.md", "base_dir": "/projects"}'
+
+# Check the mount landed
+docker exec mcpo ls -la /projects
 ```
 
 ---
 
-## Available Tools
+## Tools
 
-| Tool | Description |
-|------|-------------|
-| `list_projects()` | List all project directories in `/projects` |
-| `get_project_structure(project, base_dir)` | Tree view of a project |
-| `read_project_file(project, file_path, base_dir)` | Read a file's content |
-| `search_projects(pattern, base_dir)` | Regex search across projects |
-| `list_project_files(project, base_dir)` | List files in a project |
+All five are read-only. Paths are always resolved relative to `base_dir`.
 
----
+| Tool | Signature | Notes |
+| --- | --- | --- |
+| `list_projects` | `(base_dir="/projects")` | Directory names only, no contents |
+| `list_project_files` | `(project, base_dir="/projects", max_files=30)` | One level of files |
+| `get_project_structure` | `(project, base_dir="/projects", max_depth=3)` | Tree view |
+| `read_project_file` | `(project, file_path, base_dir="/projects", max_bytes=32000)` | File contents, size-capped |
+| `search_projects` | `(pattern, base_dir="/projects", file_pattern="*", max_results=50)` | Regex across all projects |
 
-## CLI Examples (via mcpo OpenAPI)
+`base_dir` also accepts `/configs` and `/logs` where the tools are meaningful.
 
-### List projects
-```bash
-curl -X POST http://localhost:8000/projects_ops/list_projects \
-  -H "Content-Type: application/json" \
-  -d '{"base_dir": "/projects"}'
-```
+### Example
 
-### Get project structure
-```bash
-curl -X POST http://localhost:8000/projects_ops/get_project_structure \
-  -H "Content-Type: application/json" \
-  -d '{"project": "myapp", "base_dir": "/projects"}'
-```
-
-### Read a file
-```bash
-curl -X POST http://localhost:8000/projects_ops/read_project_file \
-  -H "Content-Type: application/json" \
-  -d '{"project": "myapp", "file_path": "src/main.py", "base_dir": "/projects"}'
-```
-
-### Search across projects
 ```bash
 curl -X POST http://localhost:8000/projects_ops/search_projects \
   -H "Content-Type: application/json" \
   -d '{"pattern": "TODO|FIXME", "base_dir": "/projects"}'
 ```
 
-### List project files
-```bash
-curl -X POST http://localhost:8000/projects_ops/list_project_files \
-  -H "Content-Type: application/json" \
-  -d '{"project": "myapp", "base_dir": "/projects"}'
+In chat, after registering the server:
+
+```
+Use projects_ops to search_projects for "TODO" in /projects
+Use projects_ops to get_project_structure for project "myapp"
 ```
 
 ---
 
-## Open WebUI Integration
+## Security model
 
-1. Admin Panel → Settings → Integrations → External Tool Servers
-2. Add OpenAPI server:
-   - Name: `projects_ops`
-   - URL: `http://mcpo:8000/projects_ops`
-3. Enable in chat sessions (top-right tools icon)
+Every constraint below is enforced in code, not by convention:
 
-Then in chat:
-```
-Use projects_ops to list_projects in /projects
-Use projects_ops to get_project_structure for project "myapp" in /projects
-Use projects_ops to read_project_file from project "myapp", file "src/main.py"
-Use projects_ops to search_projects for pattern "TODO" in /projects
-```
+- **Path traversal blocked** — paths resolve relative to `base_dir`; `..` and
+  absolute escapes are rejected
+- **Sensitive files blocked** — `.env`, keys, certificates, and similar
+- **Size caps** — 32KB per read (`MAX_FILE_BYTES`), 50 search results
+  (`MAX_RESULTS`)
+- **Directory exclusions** — `.git`, `node_modules`, `__pycache__`, `.venv`, etc.
+- **Read-only** — no write capability, and the volumes mount `:ro`
+- **Localhost only** — every service binds to `127.0.0.1`
 
----
+### Access matrix
 
-## Project Directory Setup
-
-```bash
-# Create your projects (on Windows host)
-mkdir -p ~/projects/myapp/src
-echo "print('hello')" > ~/projects/myapp/src/main.py
-echo "# My App" > ~/projects/myapp/README.md
-```
-
-Docker mounts `~/projects` → `/projects` (read-only) via compose:
-```yaml
-volumes:
-  - ${MY_LOCAL_AGENT_ROOT:-/mnt/c/Users/$USER}/projects:/projects:ro
-```
-
----
-
-## Security (All Enforced)
-
-- Path traversal blocked (paths resolved relative to base dirs)
-- Sensitive files blocked (`.env`, keys, certs, etc.)
-- 32KB read limit per file
-- Exclusions: `.git`, `node_modules`, `__pycache__`, `.venv`, etc.
-- Read-only — no write capability
-- All services bind to localhost only
-
----
-
-## File Access Permissions
-
-| Tool | Directories | Access | Size Limits |
-|------|-------------|--------|-------------|
-| filesystem | /workspace | R/W | 32KB read, 1MB write |
-| projects_ops | /projects, /configs | Read-only | 32KB read |
-| local_ops | /repo, /data, /workspace | Read-only | 32KB read |
-| agent_cli.py | --repo directory | Conditional | 32KB read, 1MB write |
+| Surface | Directories | Access | Limits |
+| --- | --- | --- | --- |
+| `filesystem` | `/workspace` | read/write | 32KB read, 1MB write |
+| `projects_ops` | `/projects`, `/configs`, `/logs` | read-only | 32KB read |
+| `local_ops` | `/repo`, `/data`, `/workspace` | read-only | 32KB read |
+| `agent_cli.py` | `--repo` | read; write with `--apply` | 32KB read, 1MB write |
 
 ---
 
 ## Troubleshooting
 
-### mcpo doesn't see new tools
+**mcpo doesn't see the tools**
+
 ```bash
 docker compose restart mcpo
 docker logs mcpo
 ```
 
-### Projects directory not accessible
+**Projects directory not accessible**
+
 ```bash
 docker exec mcpo ls -la /projects
-ls -la ~/projects
+ls -la ~/projects   # does the host path exist and match the compose default?
 ```
 
-### Authentication proxy fails (if enabled)
+A common cause is a `base_dir` default that doesn't match your setup — the
+compose default assumes a Windows host under `/mnt/c/Users/$USER`, but
+`setup-projects.sh` may have created the directories on the Linux filesystem
+instead.
+
+**Auth proxy fails (if enabled)**
+
 ```bash
+docker logs auth_proxy
 docker exec auth_proxy cat /etc/caddy/Caddyfile
 docker exec auth_proxy env | grep ADMIN
-docker logs auth_proxy
 ```
 
----
+**Rollback**
 
-## Rollback
-```bash
-# Comment out volume mounts in docker-compose.yml
-# Remove projects_ops from mcpo/config.json
-docker compose restart mcpo
-```
-
----
-
-## Directory Structure (Created by setup-projects.sh)
-
-```
-C:\Users\<your-username>\
-├── projects\        # Your project directories
-├── configs\         # Configuration files
-└── logs\            # Log files for analysis
-```
-
-Docker mounts these as `/projects`, `/configs`, `/logs` (read-only).
+Comment out the three volume mounts, remove `projects_ops` from
+`mcpo/config.json`, then `docker compose restart mcpo`.

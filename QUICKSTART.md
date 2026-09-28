@@ -1,123 +1,110 @@
-# Quickstart — start the whole stack from WSL2
+# Quickstart
 
-This is the 60-second version of README.md. Copy the commands verbatim —
-every file name below matches what is actually in this repo.
+The 60-second version of [README.md](README.md). Commands are copy-pasteable and
+match what is actually in this repo.
 
-> You need: Docker Desktop **running** with the **WSL2 backend**, and the
-> `wsl` command available from a Windows PowerShell/CMD prompt. Everything else
-> is given to you by the compose file.
->
-> **Portable paths:** set `MY_LOCAL_AGENT_ROOT` to your repo root (WSL path).
-> Defaults to the current directory if unset.
-> 
-> ```bash
-> # Example (adjust to your actual path):
-> export MY_LOCAL_AGENT_ROOT="/mnt/c/Users/yourname/my-local-agent"
-> # Or auto-detect from current dir:
-> export MY_LOCAL_AGENT_ROOT="$(pwd)"
-> ```
+**Prerequisites:** Windows 10/11, Docker Desktop running on the **WSL2** backend,
+an NVIDIA GPU with a current driver, and `wsl` on your PATH. Everything else comes
+from the compose file.
+
+**Portable paths.** Set `MY_LOCAL_AGENT_ROOT` to your repo root as a WSL path.
+Every command below falls back to the current directory, so you can skip this if
+you `cd` into the repo first.
+
+```bash
+export MY_LOCAL_AGENT_ROOT="/mnt/c/Users/yourname/my-local-agent"
+```
 
 ---
 
-## 1. One command to start everything
+## 1. Start the stack
 
-    wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && docker compose up -d --build'
+```bash
+wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && docker compose up -d --build'
+```
 
-This starts three containers + pulls a model the first time:
+| Service | Port | Purpose |
+| --- | --- | --- |
+| ollama | 11434 | Inference |
+| open-webui | 3000 | Chat UI |
+| mcpo | 8000 | MCP → OpenAPI bridge (4 servers) |
 
-| Service    | Purpose              | Address        |
-| ---------- | -------------------- | -------------- |
-| Ollama     | Local model runtime  | :11434 / UI    |
-| mcpo       | MCP bridge (3 tools) | :8000          |
-| Open WebUI | Chat UI              | :3000          |
+The first run pulls a model (~5–6 GB). Later runs are instant. From Windows you
+can also use `make up` if you have `make` in WSL2.
 
-First run does a one-time model pull (~5–6 GB). Later runs are instant.
+## 2. Verify
 
----
+```bash
+wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/smoke-test.sh'
+```
 
-## 2. Verify it is actually working
-
-    wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/smoke-test.sh'
-
-Expect: `SMOKE: PASS` and a GPU row `qwen3:8b  … VRAM …` (proof it's on the
-RTX 5080, not CPU).
-
----
+Expect `SMOKE: PASS` plus a GPU row for `qwen3:8b` — that row is the proof the
+model is on the GPU rather than the CPU. The script checks, in order: Ollama is
+alive, a chat completion round-trips, mcpo exposes its tools, the model is
+VRAM-resident, and `agent_cli.py ask` works.
 
 ## 3. Talk to it
 
-    # Open WebUI chat UI
-    start http://localhost:3000
+```bash
+# Chat UI
+start http://localhost:3000
 
-    # or from a Windows terminal via the OpenAI-compatible API
-    curl -s http://localhost:11434/v1/chat/completions -H "Content-Type: application/json" `
-      -d '{"model":"qwen3:8b","messages":[{"role":"user","content":"Say hello to local agent"}]}' |
-      python -c "import json,sys; print(json.load(sys.stdin)['choices'][0]['message']['content'])"
+# Or the OpenAI-compatible API from a Windows terminal
+curl -s http://localhost:11434/v1/chat/completions -H "Content-Type: application/json" -d '{"model":"qwen3:8b","messages":[{"role":"user","content":"Hello"}]}'
+```
 
-    # or from **Linux/WSL2 terminal** (recommended):
-    python3 agent_cli.py ask "What is 2+2?"
-    python3 agent_cli.py plan "Add health checks"
-    python3 agent_cli.py agent "Fix the syntax error"
-    python3 agent_cli.py agent --apply "Fix the syntax error in test_failing.py"
+From a WSL2 terminal, drive the agent directly:
 
----
+```bash
+python3 agent_cli.py ask "What is 2+2?"
+python3 agent_cli.py plan "Add health checks"
+python3 agent_cli.py agent "Fix the syntax error"          # dry-run
+python3 agent_cli.py agent --apply "Fix the syntax error"  # writes under --repo
+```
 
-## 4. Scheduled night agent (the "works while you sleep" part)
+## 4. Nightly triage
 
-The stack includes a real nightly agent: a Python triage job that inspects the
-repo + GPU and writes a dated report.
+```bash
+wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/install-cron.sh'
+wsl crontab -l | grep my-local-agent-nightly-triage
+```
 
-    wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/install-cron.sh'
+Installs a 5:00 PM daily entry (`CRON_HOUR` / `CRON_MIN` override). Reports land
+in `reports/YYYY-MM-DD.md`. To get a draft PR per report as well, set `DRAFT_PR=1`
+and `GH_REPO=owner/repo` before installing.
 
-This installs a cron entry that runs the agent every day at **5:00 PM** (`0 17 * * *`). Grab the hourly override if you ever need a different one: `CRON_HOUR=17 CRON_MIN=0 ./scripts/install-cron.sh`.
-Verify it landed:
+Prove it works without waiting for cron:
 
-    wsl crontab -l            # look for the "my-local-agent-nightly-triage" line
+```bash
+wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && python3 scripts/nightly-triage.py'
+```
 
-Reports appear in `reports/<YYYY-MM-DD>.md` each morning. To also get a draft
-PR you approve, set `DRAFT_PR=1` with a `GH_REPO` when installing.
+You should see the tool loop run (`git_status`, `grep`, `gpu_status`,
+`models_list`) and a new report appear in `reports/`.
 
-Run it once immediately (no cron needed) to prove it works:
+## 5. Evaluation
 
-    wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && python3 scripts/nightly-triage.py'
+```bash
+wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/run-eval.sh && python3 scripts/eval-summary.py'
+```
 
-You should see a tool loop print (`git_status`, `gpu_status`, `models_list`,
-`grep`, …) and a written `reports/<today>.md`.
-
----
-
-## 5. Reliability harness (measure it, don't hope)
-
-    wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/run-eval.sh && python3 scripts/eval-summary.py'
-
-Expected result: `6/6 passed` and a pass-rate trend printed from
-`eval/history.jsonl`. That number is the "reliability" answer for the project.
-
----
-
-## 6. Health dashboard (optional)
-
-If you have `wsl-vpnkit`-style setup or just want a plain HTTP check from
-Windows:
-
-    curl -s -o NUL -w "ollama %{http_code}  " http://localhost:11434
-    curl -s -o NUL -w "mcpo %{http_code}  " http://localhost:8000
-    curl -s -o NUL -w "webui %{http_code}`n" http://localhost:3000
-
-Three 200s = everything is serving.
+Expect `6/6 passed` and a pass-rate trend from `eval/history.jsonl`. That number
+is the project's reliability answer.
 
 ---
 
 ## Troubleshooting
 
-| Symptom                              | Fix                                                                 |
-| ------------------------------------ | ------------------------------------------------------------------- |
-| `command not found: docker`           | Start **Docker Desktop** (it provides the docker CLI in WSL2)       |
-| `connection refused: 11434`          | Containers not up yet → re-run step 1 and wait ~30 s for Ollama      |
-| Smoke test "GPU" row missing/failing | Model not finished pulling → re-run step 1 once                     |
-| WebUI won't load on :3000            | First cold start is slow; retry after ~1 min                        |
-| Cron reports not appearing           | `wsl bash -lc 'service cron start'` then re-run `install-cron.sh`    |
+| Symptom | Fix |
+| --- | --- |
+| `docker: command not found` | Start Docker Desktop; it provides the CLI in WSL2 |
+| `connection refused :11434` | Stack not up — re-run step 1, allow ~30s for Ollama |
+| No GPU row in smoke test | Model still pulling; re-run step 1 |
+| WebUI won't load on :3000 | Cold start is slow; retry after ~1 min |
+| Cron reports not appearing | `wsl bash -lc 'service cron start'`, then re-run `install-cron.sh` |
 
-All data stays local. Nothing in this file calls a cloud API.
+Full GPU troubleshooting, optional profiles, and the tool reference live in
+[README.md](README.md). To grant the agent read access to your other project
+directories, see [PROJECTS.md](PROJECTS.md).
 
-For homelab setup and project access features, see [HOMELAB-SETUP.md](HOMELAB-SETUP.md).
+All data stays local. Nothing in this project calls a cloud API.
