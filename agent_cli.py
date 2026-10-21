@@ -32,6 +32,7 @@ from typing import Any
 
 DEFAULT_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "qwen3:8b")
+RAG_URL = os.environ.get("RAG_URL", "http://localhost:8000/rag_ops")
 MAX_TOOL_STEPS = 10
 MAX_FILE_BYTES = 32_000
 
@@ -91,6 +92,8 @@ class LocalTools:
                 return data[:MAX_FILE_BYTES]
             if name == "search":
                 return self._search(str(args["pattern"]), str(args.get("glob", "")))
+            if name == "semantic_search":
+                return self._semantic_search(str(args["query"]), int(args.get("k", 5)))
             if name == "write_file":
                 return self._write_file(str(args["path"]), str(args["content"]))
             if name == "run_tests":
@@ -170,6 +173,19 @@ class LocalTools:
                 continue
         return "\n".join(matches) or "(no matches)"
 
+    def _semantic_search(self, query: str, k: int) -> str:
+        """Query the rag_ops MCP server (via mcpo); needs the stack and an index."""
+        request = urllib.request.Request(
+            RAG_URL.rstrip("/") + "/semantic_search",
+            data=json.dumps({"query": query, "k": max(1, min(k, 10))}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return str(json.load(response))[:MAX_FILE_BYTES]
+        except OSError as exc:
+            return f"ERROR: RAG service unavailable ({exc}); use search/read_file instead"
+
     def _write_file(self, relative: str, content: str) -> str:
         path = resolve_repo_path(self.repo, relative)
         if is_sensitive_path(self.repo, path):
@@ -178,16 +194,14 @@ class LocalTools:
             return "ERROR: proposed file content exceeds the 1 MB safety limit"
         self.pending_writes[path] = content
         if not self.apply:
-            dry_msg = (
-            f"STAGED DRY-RUN: {relative} ({len(content)} chars). "
-            "It will not be written without --apply and confirmation."
-        )
-        return dry_msg
-        staged_msg = (
+            return (
+                f"STAGED DRY-RUN: {relative} ({len(content)} chars). "
+                "It will not be written without --apply and confirmation."
+            )
+        return (
             f"STAGED: {relative} ({len(content)} chars). "
             "The user must still confirm the diff before it is written."
         )
-        return staged_msg
 
 
 def tool_definitions(mode: str) -> list[dict[str, Any]]:
@@ -227,6 +241,21 @@ def tool_definitions(mode: str) -> list[dict[str, Any]]:
                         "glob": {"type": "string"},
                     },
                     "required": ["pattern"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "semantic_search",
+                "description": (
+                    "Meaning-based search over indexed project docs and code. Use for "
+                    "conceptual questions where you do not know the exact keywords."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}, "k": {"type": "integer"}},
+                    "required": ["query"],
                 },
             },
         },

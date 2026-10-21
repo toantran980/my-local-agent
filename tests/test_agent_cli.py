@@ -1,12 +1,16 @@
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from agent_cli import (
     LocalTools,
     apply_pending_writes,
     is_sensitive_path,
     resolve_repo_path,
+    tool_definitions,
 )
 
 
@@ -66,6 +70,22 @@ class AgentCliSafetyTests(unittest.TestCase):
         result = dry_tools.call("write_file", {"path": "test.txt", "content": "test"})
         self.assertIn("DRY-RUN", result)
         self.assertIn("without --apply", result)
+
+    def test_semantic_search_degrades_when_service_down(self):
+        with mock.patch("agent_cli.urllib.request.urlopen", side_effect=OSError("refused")):
+            result = self.tools.call("semantic_search", {"query": "vram"})
+        self.assertTrue(result.startswith("ERROR: RAG service unavailable"))
+
+    def test_semantic_search_returns_service_text(self):
+        body = io.BytesIO(json.dumps("[0.9] eval/rag/docs/vram.md").encode())
+        with mock.patch("agent_cli.urllib.request.urlopen", return_value=body):
+            result = self.tools.call("semantic_search", {"query": "vram", "k": 3})
+        self.assertIn("vram.md", result)
+
+    def test_semantic_search_is_read_only_in_every_mode(self):
+        for mode in ("ask", "plan", "agent"):
+            names = [t["function"]["name"] for t in tool_definitions(mode)]
+            self.assertIn("semantic_search", names)
 
 
 if __name__ == "__main__":
