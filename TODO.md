@@ -1,0 +1,41 @@
+# TODO
+
+Next steps, best fit first. Check items off as they land.
+
+## Applied AI (agent and RAG quality)
+
+- [ ] **Reranking**: retrieve the top 20 chunks (vector + keyword), then rerank with the LLM or a
+      cross-encoder. Make the retrieval eval hard enough to tell vector-only from hybrid from reranked.
+- [ ] **Tool-use eval (LLM-as-judge)**: replay `.agent/audit/` runs and score tool choice, wasted
+      steps and task completion. Use it to measure reflection and the planner.
+- [ ] **Guardrails / structured output**: JSON-schema tool calls with validation and a retry on
+      malformed output (helps small models like `qwen3.5:4b`).
+- [ ] **Query rewriting / HyDE**: rewrite the question or generate a hypothetical answer before embedding.
+- [ ] **Model routing / self-consistency**: easy prompts to the 4B model, hard ones to `qwen3:14b`,
+      or majority vote over several samples.
+- [ ] **Conversation summarization**: compress old turns to stay inside the 16k context.
+- [ ] **Nightly anomaly detection**: statistical checks on GPU, VRAM and latency trends.
+
+## Course topic coverage
+
+- [ ] **Weeks 7-9, vision (biggest gap)**: `mcp/vision_ops.py` MCP server with a multimodal model
+      (`llava` / `qwen2.5-vl`) or `torchvision` for classification, OCR/digits and detection.
+      Optional: tiny MNIST CNN served as a tool.
+- [ ] **Weeks 10-12, speech**: Whisper (`faster-whisper`) voice input and Piper voice output.
+- [ ] **Weeks 10-12, NLP**: sentiment / text-classification tool; LoRA fine-tune of a small model
+      on audit trails.
+- [ ] **Weeks 13-15, generative AI**: local image generation (Stable Diffusion / ComfyUI) tool and a
+      story-generation mode.
+- [ ] **Weeks 3-5, HPC**: benchmark script for tokens/sec and VRAM across `qwen3` 4b / 8b / 14b.
+- [ ] **Weeks 1-2, ethics**: `docs/` note on privacy, safety and limits (cite the memory-poisoning bug).
+
+## Housekeeping
+
+- [ ] Check `PROJECTS.md` and `docs/` for stale references.
+- [ ] Run the reflection and planner paths against a live model on more than one prompt.
+
+## What next
+
+1. Reranking, then the tool-use eval so every later change can be measured.
+2. `vision_ops` to cover the CNN / computer-vision weeks.
+3. Whisper voice input.
