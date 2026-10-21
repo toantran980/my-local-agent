@@ -44,3 +44,22 @@ for r in sorted(rows, key=lambda x: x.get("ts", "")):
 print("-" * 52)
 rate = (all_p / all_t * 100) if all_t else 0
 print(f"all-time: {all_p}/{all_t} ({rate:.0f}%) across {len(rows)} runs")
+
+# Side-by-side model comparison. Runs from before latency logging have no "seconds".
+by_model = {}
+for r in rows:
+    by_model.setdefault(r.get("model", "?").removeprefix("ollama/"), []).append(r)
+
+print()
+print(f"{'model':<20} {'runs':>4} {'pass':>9} {'rate':>6} {'latest':>7} {'avg s/run':>10}")
+print("-" * 62)
+for model, runs in sorted(by_model.items()):
+    p = sum(x["passed"] for x in runs)
+    t = sum(x["total"] for x in runs)
+    latest = max(runs, key=lambda x: x.get("ts", ""))
+    latest_rate = latest["passed"] / latest["total"] * 100 if latest["total"] else 0
+    secs = [x["seconds"] for x in runs if "seconds" in x]
+    avg = f"{sum(secs) / len(secs):.0f}" if secs else "-"
+    rate = p / t * 100 if t else 0
+    row = f"{model:<20} {len(runs):>4} {f'{p}/{t}':>9} {rate:>5.0f}%"
+    print(f"{row} {latest_rate:>6.0f}% {avg:>10}")

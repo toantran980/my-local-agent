@@ -79,6 +79,7 @@ trap 'rm -f "$TMP"' EXIT
 passed=0
 total=0
 failures=()
+START_SECONDS=$SECONDS
 for casefile in eval/cases/*.json; do
   name="$(basename "$casefile" .json)"
   build_prompt "$casefile"
@@ -102,14 +103,15 @@ for casefile in eval/cases/*.json; do
 done
 
 TS="$(python3 -c 'import datetime; print(datetime.datetime.now(datetime.timezone.utc).isoformat())')"
-python3 - "$TS" "$MODEL" "$passed" "$total" <<'PY'
+ELAPSED=$((SECONDS - START_SECONDS))
+python3 - "$TS" "$MODEL" "$passed" "$total" "$ELAPSED" <<'PY'
 import json, sys
-ts, model, p, t = sys.argv[1:]
+ts, model, p, t, secs = sys.argv[1:]
 with open("eval/history.jsonl", "a") as fh:
-    fh.write(json.dumps({"ts": ts, "model": model,
-                         "passed": int(p), "total": int(t)}) + "\n")
+    fh.write(json.dumps({"ts": ts, "model": model, "passed": int(p),
+                         "total": int(t), "seconds": int(secs)}) + "\n")
 PY
 
 echo "----"
-echo "RESULT: $passed/$total passed ($MODEL)"
+echo "RESULT: $passed/$total passed ($MODEL) in ${ELAPSED}s"
 [ ${#failures[@]} -eq 0 ] || echo "failures: ${failures[*]}"

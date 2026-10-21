@@ -55,7 +55,9 @@ opt-in Ollama container).
 `OLLAMA_URL` (default `http://localhost:11434`), `AGENT_MODEL` and
 `NIGHTLY_MODEL` (default `qwen3:8b`), `CRON_HOUR` / `CRON_MIN` (17 / 0),
 `DRAFT_PR` and `GH_REPO` for draft PRs, `ADMIN_USER` / `ADMIN_PASSWORD` for the
-auth proxy. Full table in [README.md](README.md#configuration).
+auth proxy. `AGENT_MEMORY=0` disables run memory (`AGENT_MEMORY_DIR` relocates it),
+`RAG_URL` points the CLI and nightly job at mcpo's `rag_ops`, `HYBRID_WEIGHT` tunes
+retrieval (0 = vector only). Full table in [README.md](README.md#configuration).
 
 ## Constraints
 
@@ -70,6 +72,9 @@ Do not violate these — they are enforced in code:
 - `projects_ops` is read-only; `/projects`, `/configs`, `/logs` mount `:ro`.
 - `rag_ops` never writes to sources; it only writes its index to `/workspace/.rag`
   and skips sensitive files.
+- Agent memory (`workspace/memory/`) is redacted like the audit log; keep it inside
+  `workspace/`, the only writable sandbox.
+- `mcpo/Dockerfile` pins `fastapi<0.142`; newer FastAPI breaks mcpo 0.0.20 at startup.
 
 ## VRAM (16GB card)
 

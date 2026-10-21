@@ -61,6 +61,8 @@ python3 agent_cli.py ask "What is 2+2?"
 python3 agent_cli.py plan "Add health checks"
 python3 agent_cli.py agent "Fix the syntax error"          # dry-run
 python3 agent_cli.py agent --apply "Fix the syntax error"  # writes under --repo
+python3 agent_cli.py ask --stream "Summarize this repo"    # live tokens
+python3 agent_cli.py agent --plan-first "Fix the syntax error"  # plan, execute, replan
 ```
 
 ## 4. Nightly triage

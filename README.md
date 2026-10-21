@@ -96,9 +96,22 @@ Safety rails, all enforced in code: max 10 tool steps per run, 32KB read cap,
 sensitive paths (`.env`, keys, certs) blocked, credentials redacted before audit.
 
 The read-only `semantic_search` tool calls the `rag_ops` server through mcpo
-(`RAG_URL`, default `http://localhost:8000/rag_ops`). It needs the stack up and an
-index (`index_sources`); if unreachable, it returns an error and the agent falls
-back to `search` / `read_file`.
+(`RAG_URL`, default `http://localhost:8000/rag_ops`). It re-indexes once per run
+before searching, so results are fresh, and the system prompt requires answers to
+cite source files like `[vram.md]`. If the service is unreachable it returns an
+error and the agent falls back to `search` / `read_file`.
+
+More agent behavior:
+
+| Feature | How |
+|---|---|
+| Streaming | `--stream` prints tokens as they arrive (reasoning shows as `(thinking...)`) |
+| Planner/executor | `agent --plan-first "task"` plans, executes, and replans once if tests fail |
+| Reflect-and-retry | In agent mode, staged writes are tested automatically; a failure is fed back once for a fix |
+| Memory | Each run appends a redacted summary to `workspace/memory/<date>.md` (indexed by RAG); `AGENT_MEMORY=0` disables, `AGENT_MEMORY_DIR` relocates |
+
+`rag_ops` splits Markdown by heading and scores hits as a blend of embedding
+similarity and keyword overlap (`HYBRID_WEIGHT`, default 0.3; `0` = vector only).
 
 Every run appends structured JSONL to `.agent/audit/<date>.jsonl` — prompts,
 decisions, tool calls, retries, verification, approvals. Inspect one with:
@@ -122,6 +135,8 @@ crontab -l | grep my-local-agent-nightly-triage
 ```
 
 Set `DRAFT_PR=1` plus `GH_REPO=owner/repo` to also open a draft PR per report.
+Before triaging, the job makes a best-effort call to refresh the RAG index (skipped
+silently if mcpo is down).
 
 The `latest_nightly_report` MCP tool reads these reports through a read-only
 `./reports` mount at `/data/reports`.
@@ -140,15 +155,17 @@ so the harness is CI-usable.
 bash scripts/run-eval.sh              # default model: ollama/qwen3:8b
 bash scripts/run-eval.sh ollama/qwen3:0.6b
 NUM_PREDICT=8192 bash scripts/run-eval.sh ollama/qwen3.5:4b   # thinking models
-python3 scripts/eval-summary.py       # per-day, per-model pass-rate table
+python3 scripts/eval-summary.py       # per-day table + side-by-side model comparison
 ```
 
-Each run appends `{ts, model, passed, total}` to `eval/history.jsonl` — the
-reliability trend over time.
+Each run appends `{ts, model, passed, total, seconds}` to `eval/history.jsonl` — the
+reliability and latency trend over time. Run the suite once per model, then the
+summary's comparison table shows pass rate and average seconds per run for each.
 
 Retrieval quality has its own check. [`scripts/eval-rag.py`](scripts/eval-rag.py)
-indexes `eval/rag/docs/` and measures hit@1 for the queries in
-`eval/rag/cases.json`, exiting non-zero below `THRESHOLD` (default 0.8):
+indexes `eval/rag/docs/` and measures hit@1 for the 16 queries in
+`eval/rag/cases.json`, reporting vector-only and hybrid side by side and exiting
+non-zero when the hybrid rate is below `THRESHOLD` (default 0.8):
 
 ```bash
 python3 scripts/eval-rag.py           # needs nomic-embed-text in Ollama
