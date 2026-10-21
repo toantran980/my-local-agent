@@ -123,7 +123,8 @@ class AgentCliSafetyTests(unittest.TestCase):
 
 class AgentFeatureTests(unittest.TestCase):
     PASS = "verification=staged-copy\nexit=0\nok"
-    FAIL = "verification=staged-copy\nexit=1\nboom"
+    FAIL = "verification=staged-copy\nexit=1\nFAILED a.py::test_x - boom"
+    UNRELATED = "verification=staged-copy\nexit=1\nFAILED other/test_old.py::test_y"
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -153,6 +154,12 @@ class AgentFeatureTests(unittest.TestCase):
         replies = [_reply(calls=[_write_call()]), _reply("done"), _reply("still broken")]
         result, post = self._agent(replies, [self.FAIL])
         self.assertIs(result.tests_passed, False)
+        self.assertEqual(post.call_count, len(replies))
+
+    def test_unrelated_failing_tests_do_not_trigger_reflection(self):
+        replies = [_reply(calls=[_write_call()]), _reply("done")]
+        result, post = self._agent(replies, [self.UNRELATED])
+        self.assertIsNone(result.tests_passed)
         self.assertEqual(post.call_count, len(replies))
 
     def test_no_verification_without_staged_writes(self):
@@ -193,6 +200,14 @@ class AgentFeatureTests(unittest.TestCase):
         self.assertEqual((call["id"], call["function"]["name"]), ("c1", "search"))
         self.assertEqual(json.loads(call["function"]["arguments"]), {"pattern": "x"})
 
+    def test_finish_run_without_plan_file_does_not_crash(self):
+        result = RunResult("answer", {}, self.repo / ".agent" / "audit" / "a.jsonl")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            finish_run(result, "agent", self.repo, apply=False)
+        self.assertIn("answer", out.getvalue())
+        self.assertNotIn("Plan saved", out.getvalue())
+
     def test_streamed_answer_is_not_printed_twice(self):
         result = RunResult("hi", {}, self.repo / "a.jsonl", streamed=True)
         out = io.StringIO()
@@ -203,10 +218,10 @@ class AgentFeatureTests(unittest.TestCase):
     def test_planned_run_replans_once_and_keeps_staged_writes(self):
         staged = {Path("a.py"): "x"}
         results = [
-            RunResult("plan one", {}, Path("a")),
-            RunResult("tried", staged, Path("a"), tests_passed=False, test_output="exit=1"),
-            RunResult("plan two", {}, Path("a")),
-            RunResult("done", staged, Path("a"), tests_passed=True),
+            RunResult("plan one", {}, self.repo / "a.jsonl"),
+            RunResult("tried", staged, self.repo / "a.jsonl", tests_passed=False, test_output="exit=1"),
+            RunResult("plan two", {}, self.repo / "a.jsonl"),
+            RunResult("done", staged, self.repo / "a.jsonl", tests_passed=True),
         ]
         with mock.patch("agent_cli.run_agent", side_effect=results) as runner, \
                 contextlib.redirect_stdout(io.StringIO()):
@@ -216,8 +231,8 @@ class AgentFeatureTests(unittest.TestCase):
         self.assertEqual(runner.call_args_list[-1].kwargs["seed_writes"], staged)
 
     def test_planned_run_does_not_replan_when_tests_pass(self):
-        results = [RunResult("plan", {}, Path("a")),
-                   RunResult("done", {}, Path("a"), tests_passed=True)]
+        results = [RunResult("plan", {}, self.repo / "a.jsonl"),
+                   RunResult("done", {}, self.repo / "a.jsonl", tests_passed=True)]
         with mock.patch("agent_cli.run_agent", side_effect=results) as runner, \
                 contextlib.redirect_stdout(io.StringIO()):
             run_planned("fix it", self.repo, "m", "http://x", apply=False)
