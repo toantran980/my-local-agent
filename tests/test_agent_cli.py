@@ -1,3 +1,4 @@
+import contextlib
 import io
 import json
 import tempfile
@@ -7,11 +8,29 @@ from unittest import mock
 
 from agent_cli import (
     LocalTools,
+    RunResult,
     apply_pending_writes,
+    finish_run,
     is_sensitive_path,
+    post_stream,
     resolve_repo_path,
+    run_agent,
+    run_planned,
+    system_prompt,
     tool_definitions,
 )
+
+
+def _reply(content="", calls=None):
+    message = {"role": "assistant", "content": content}
+    if calls:
+        message["tool_calls"] = calls
+    return {"choices": [{"message": message}]}
+
+
+def _write_call(path="a.py", content="x = 1\n"):
+    return {"id": "1", "function": {"name": "write_file",
+                                    "arguments": json.dumps({"path": path, "content": content})}}
 
 
 class AgentCliSafetyTests(unittest.TestCase):
@@ -77,15 +96,132 @@ class AgentCliSafetyTests(unittest.TestCase):
         self.assertTrue(result.startswith("ERROR: RAG service unavailable"))
 
     def test_semantic_search_returns_service_text(self):
-        body = io.BytesIO(json.dumps("[0.9] eval/rag/docs/vram.md").encode())
-        with mock.patch("agent_cli.urllib.request.urlopen", return_value=body):
+        responses = [io.BytesIO(json.dumps(text).encode()) for text in ("indexed", "[0.9] vram.md")]
+        with mock.patch("agent_cli.urllib.request.urlopen", side_effect=responses):
             result = self.tools.call("semantic_search", {"query": "vram", "k": 3})
         self.assertIn("vram.md", result)
+
+    def test_semantic_search_reindexes_once_per_run(self):
+        def fresh(*_args, **_kwargs):
+            return io.BytesIO(json.dumps("ok").encode())
+
+        with mock.patch("agent_cli.urllib.request.urlopen", side_effect=fresh) as opened:
+            self.tools.call("semantic_search", {"query": "a"})
+            self.tools.call("semantic_search", {"query": "b"})
+        urls = [call.args[0].full_url for call in opened.call_args_list]
+        self.assertEqual([u.rsplit("/", 1)[-1] for u in urls],
+                         ["index_sources", "semantic_search", "semantic_search"])
+
+    def test_system_prompt_requires_citations(self):
+        self.assertIn("cite", system_prompt("ask", apply=False).lower())
 
     def test_semantic_search_is_read_only_in_every_mode(self):
         for mode in ("ask", "plan", "agent"):
             names = [t["function"]["name"] for t in tool_definitions(mode)]
             self.assertIn("semantic_search", names)
+
+
+class AgentFeatureTests(unittest.TestCase):
+    PASS = "verification=staged-copy\nexit=0\nok"
+    FAIL = "verification=staged-copy\nexit=1\nboom"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.repo = Path(self.temp.name)
+        patcher = mock.patch("agent_cli.MEMORY_ENABLED", new=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _agent(self, replies, test_outputs, mode="agent"):
+        with mock.patch("agent_cli.post", side_effect=replies) as post, mock.patch(
+            "agent_cli.LocalTools._run_staged_tests", side_effect=test_outputs
+        ):
+            result = run_agent(mode, "task", self.repo, "m", "http://x", apply=False)
+        return result, post
+
+    def test_reflection_retries_once_then_passes(self):
+        replies = [_reply(calls=[_write_call()]), _reply("done"),
+                   _reply(calls=[_write_call(content="x = 2\n")]), _reply("fixed")]
+        result, post = self._agent(replies, [self.FAIL, self.PASS])
+        self.assertTrue(result.tests_passed)
+        self.assertEqual(post.call_count, len(replies))
+        sent = post.call_args_list[-1].args[1]["messages"]
+        self.assertTrue(any("FAILED" in str(m.get("content")) for m in sent))
+
+    def test_reflection_is_capped_at_one_retry(self):
+        replies = [_reply(calls=[_write_call()]), _reply("done"), _reply("still broken")]
+        result, post = self._agent(replies, [self.FAIL])
+        self.assertIs(result.tests_passed, False)
+        self.assertEqual(post.call_count, len(replies))
+
+    def test_no_verification_without_staged_writes(self):
+        result, _ = self._agent([_reply("just an answer")], [], mode="ask")
+        self.assertIsNone(result.tests_passed)
+
+    def test_memory_entry_is_written_and_redacted(self):
+        memory = self.repo / "memory"
+        with mock.patch("agent_cli.MEMORY_ENABLED", new=True), mock.patch(
+            "agent_cli.MEMORY_DIR", new=memory
+        ), mock.patch("agent_cli.post", return_value=_reply("all good")):
+            run_agent("ask", "check password=hunter2 please", self.repo, "m", "http://x", False)
+        text = next(memory.glob("*.md")).read_text(encoding="utf-8")
+        self.assertIn("Task:", text)
+        self.assertIn("all good", text)
+        self.assertNotIn("hunter2", text)
+
+    def test_post_stream_assembles_text_and_tool_calls(self):
+        lines = [
+            {"choices": [{"delta": {"reasoning": "hmm"}}]},
+            {"choices": [{"delta": {"content": "Hel"}}]},
+            {"choices": [{"delta": {"content": "lo"}}]},
+            {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "c1", "function": {
+                "name": "search", "arguments": '{"pattern":'}}]}}]},
+            {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {
+                "arguments": '"x"}'}}]}}]},
+        ]
+        body = "".join(f"data: {json.dumps(line)}\n\n" for line in lines) + "data: [DONE]\n"
+        out = io.StringIO()
+        stream = io.BytesIO(body.encode())
+        with mock.patch("agent_cli.urllib.request.urlopen", return_value=stream), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            reply = post_stream("http://x", {"model": "m", "messages": []})
+        message = reply["choices"][0]["message"]
+        self.assertEqual(message["content"], "Hello")
+        self.assertEqual(out.getvalue(), "Hello\n")
+        call = message["tool_calls"][0]
+        self.assertEqual((call["id"], call["function"]["name"]), ("c1", "search"))
+        self.assertEqual(json.loads(call["function"]["arguments"]), {"pattern": "x"})
+
+    def test_streamed_answer_is_not_printed_twice(self):
+        result = RunResult("hi", {}, self.repo / "a.jsonl", streamed=True)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            finish_run(result, "ask", self.repo, apply=False)
+        self.assertNotIn("hi\n", out.getvalue().replace("Audit log", ""))
+
+    def test_planned_run_replans_once_and_keeps_staged_writes(self):
+        staged = {Path("a.py"): "x"}
+        results = [
+            RunResult("plan one", {}, Path("a")),
+            RunResult("tried", staged, Path("a"), tests_passed=False, test_output="exit=1"),
+            RunResult("plan two", {}, Path("a")),
+            RunResult("done", staged, Path("a"), tests_passed=True),
+        ]
+        with mock.patch("agent_cli.run_agent", side_effect=results) as runner, \
+                contextlib.redirect_stdout(io.StringIO()):
+            final = run_planned("fix it", self.repo, "m", "http://x", apply=False)
+        self.assertTrue(final.tests_passed)
+        self.assertEqual(runner.call_count, len(results))
+        self.assertEqual(runner.call_args_list[-1].kwargs["seed_writes"], staged)
+
+    def test_planned_run_does_not_replan_when_tests_pass(self):
+        results = [RunResult("plan", {}, Path("a")),
+                   RunResult("done", {}, Path("a"), tests_passed=True)]
+        with mock.patch("agent_cli.run_agent", side_effect=results) as runner, \
+                contextlib.redirect_stdout(io.StringIO()):
+            run_planned("fix it", self.repo, "m", "http://x", apply=False)
+        self.assertEqual(runner.call_count, len(results))
 
 
 if __name__ == "__main__":
