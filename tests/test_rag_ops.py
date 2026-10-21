@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -43,6 +44,41 @@ def test_iter_files_skips_sensitive_and_excluded(tmp_path):
     (tmp_path / ".git" / "config.txt").write_text("x")
     names = {p.name for p in rag.iter_files(tmp_path, 1000)}
     assert names == {"a.py"}
+
+
+def test_chunk_markdown_prefixes_heading_path():
+    text = "# Top\nintro\n## Sub\nbody text\n```\n# not a heading\n```\n"
+    chunks = rag.chunk_markdown(text, 500, 50)
+    assert any(c.startswith("Top\n") and "intro" in c for c in chunks)
+    assert any(c.startswith("Top > Sub\n") and "# not a heading" in c for c in chunks)
+
+
+def test_chunk_markdown_splits_long_sections_within_size():
+    size = 100
+    chunks = rag.chunk_markdown("## Big\n" + "word " * 200, size, 10)
+    assert len(chunks) > 1
+    assert all(len(c) <= size and c.startswith("Big\n") for c in chunks)
+
+
+def test_keyword_score_ignores_stopwords():
+    assert rag.keyword_score("what is the port", "The port is 8000") == pytest.approx(1.0)
+    assert rag.keyword_score("port banana", "port 8000") == pytest.approx(0.5)
+    assert rag.keyword_score("the of", "anything") == 0.0
+
+
+def test_hybrid_weight_can_reorder_results(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAG_DB", str(tmp_path / "i.db"))
+    conn = rag._db()
+    rows = [("a.md", 0, "unrelated words", [1.0, 0.0]),
+            ("b.md", 0, "rare keyword zebra here", [0.8, 0.6])]
+    conn.executemany("INSERT INTO chunks (path, idx, text, vec) VALUES (?,?,?,?)",
+                     [(p, i, t, json.dumps(v)) for p, i, t, v in rows])
+    qvec = [1.0, 0.0]
+    vector_only = rag.search_index(conn, qvec, 1, query="zebra", hybrid_weight=0.0)
+    hybrid = rag.search_index(conn, qvec, 1, query="zebra", hybrid_weight=0.5)
+    conn.close()
+    assert vector_only[0][1] == "a.md"
+    assert hybrid[0][1] == "b.md"
 
 
 def test_index_and_search_roundtrip(tmp_path, monkeypatch):

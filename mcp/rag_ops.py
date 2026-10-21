@@ -12,12 +12,16 @@ Env overrides:
   CHUNK_CHARS      chunk size in chars    (default 1200)
   CHUNK_OVERLAP    overlap in chars       (default 200)
   MAX_FILE_BYTES   skip bigger files      (default 200000)
+  HYBRID_WEIGHT    keyword share of the score, 0 = vector only (default 0.3)
+
+Markdown files are split by heading; other files use fixed-size windows.
 """
 
 import hashlib
 import json
 import math
 import os
+import re
 import sqlite3
 import urllib.request
 from pathlib import Path
@@ -25,6 +29,9 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("rag-ops")
+
+# Bump when chunking changes so existing indexes are re-embedded.
+CHUNKER_VERSION = "2-heading-aware"
 
 SENSITIVE_NAMES = {".env", ".npmrc", ".pypirc", "id_rsa", "id_ed25519"}
 SENSITIVE_SUFFIXES = (".pem", ".key", ".p12", ".pfx")
@@ -77,8 +84,64 @@ def chunk_text(text: str, size: int, overlap: int) -> list[str]:
             if text[i:i + size].strip()]
 
 
+def chunk_markdown(text: str, size: int, overlap: int) -> list[str]:
+    """Split Markdown by heading; each chunk is prefixed with its heading path so the
+    embedding knows which section it came from. Oversized sections fall back to
+    fixed-size windows."""
+    sections, path, body = [], [], []
+
+    def flush():
+        content = "\n".join(body).strip()
+        if content:
+            sections.append((" > ".join(path), content))
+        body.clear()
+
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        match = None if in_fence else re.match(r"(#{1,6})\s+(.*\S)", line)
+        if match:
+            flush()
+            level = len(match.group(1))
+            del path[level - 1:]
+            path.append(match.group(2))
+        else:
+            body.append(line)
+    flush()
+    chunks = []
+    for title, content in sections:
+        prefix = f"{title}\n" if title else ""
+        for piece in chunk_text(content, max(1, size - len(prefix)), overlap):
+            chunks.append(prefix + piece)
+    return chunks
+
+
+def chunk_file(path: Path, text: str, size: int, overlap: int) -> list[str]:
+    if path.suffix.lower() == ".md":
+        return chunk_markdown(text, size, overlap)
+    return chunk_text(text, size, overlap)
+
+
+STOPWORDS = {
+    "the", "a", "an", "is", "are", "of", "to", "in", "on", "for", "and", "or", "do", "does",
+    "how", "what", "which", "when", "where", "who", "my", "i", "it", "be", "can", "will",
+    "that", "this", "with", "at", "by", "from", "as", "you",
+}
+
+
+def _tokens(text: str) -> set[str]:
+    return {t for t in re.findall(r"[a-z0-9_]+", text.lower()) if t not in STOPWORDS}
+
+
+def keyword_score(query: str, text: str) -> float:
+    """Fraction of distinct query terms that appear in the text (0..1)."""
+    terms = _tokens(query)
+    return len(terms & _tokens(text)) / len(terms) if terms else 0.0
+
+
 def cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in     zip(a, b, strict=True))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
     return dot / (na * nb) if na and nb else 0.0
@@ -107,9 +170,24 @@ def _db() -> sqlite3.Connection:
     return conn
 
 
-def search_index(conn: sqlite3.Connection, qvec: list[float], k: int):
-    """Return the top-k (score, path, idx, text) rows by cosine similarity."""
-    scored = [(cosine(qvec, json.loads(vec)), path, idx, text)
+def search_index(conn: sqlite3.Connection, qvec: list[float], k: int,
+                 query: str | None = None, hybrid_weight: float | None = None):
+    """Return the top-k (score, path, idx, text) rows.
+
+    Pure cosine similarity, or, when `query` is given and the weight is above zero,
+    a hybrid of cosine and keyword overlap: (1 - w) * cosine + w * keyword.
+    """
+    if hybrid_weight is None:
+        hybrid_weight = float(_env("HYBRID_WEIGHT", "0.3"))
+    use_keywords = bool(query) and hybrid_weight > 0
+
+    def score(vec, text):
+        sim = cosine(qvec, json.loads(vec))
+        if not use_keywords:
+            return sim
+        return (1 - hybrid_weight) * sim + hybrid_weight * keyword_score(query, text)
+
+    scored = [(score(vec, text), path, idx, text)
               for path, idx, text, vec in
               conn.execute("SELECT path, idx, text, vec FROM chunks")]
     scored.sort(key=lambda r: r[0], reverse=True)
@@ -138,11 +216,11 @@ def index_sources() -> str:
                 text = p.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            sha = hashlib.sha256(text.encode()).hexdigest()
+            sha = hashlib.sha256(f"{CHUNKER_VERSION}\0{text}".encode()).hexdigest()
             row = conn.execute("SELECT sha FROM files WHERE path=?", (key,)).fetchone()
             if row and row[0] == sha:
                 continue
-            pieces = chunk_text(text, size, overlap)
+            pieces = chunk_file(p, text, size, overlap)
             vecs = embed(pieces) if pieces else []
             conn.execute("DELETE FROM chunks WHERE path=?", (key,))
             rows = zip(pieces, vecs, strict=True)
@@ -172,7 +250,7 @@ def semantic_search(query: str, k: int = 5) -> str:
     try:
         if not conn.execute("SELECT 1 FROM chunks LIMIT 1").fetchone():
             return "Index is empty. Run index_sources first."
-        hits = search_index(conn, embed([query])[0], k)
+        hits = search_index(conn, embed([query])[0], k, query=query)
     finally:
         conn.close()
     return "\n\n".join(f"[{score:.3f}] {path} (chunk {idx})\n{text}"

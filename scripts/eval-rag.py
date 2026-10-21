@@ -7,7 +7,8 @@ with the embedding model pulled. Prints hit@k and exits non-zero below THRESHOLD
   OLLAMA_URL   (default http://localhost:11434)
   EMBED_MODEL  (default nomic-embed-text)
   TOP_K        (default 1)
-  THRESHOLD    minimum hit rate 0-1 (default 0.8)
+  HYBRID_WEIGHT keyword share for the hybrid run (default 0.3)
+  THRESHOLD    minimum hybrid hit rate 0-1 (default 0.8)
 """
 
 import importlib.util
@@ -40,17 +41,24 @@ def main() -> int:
         rag = load_rag()
         print(rag.index_sources())
         conn = rag._db()
-        hits = 0
-        for case in cases:
-            qvec = rag.embed([case["query"]])[0]
-            found = [Path(path).name for _, path, _, _ in rag.search_index(conn, qvec, top_k)]
-            ok = case["expected"] in found
-            hits += ok
-            print(f"{'PASS' if ok else 'FAIL'}  {case['query']!r} -> {found}")
+        qvecs = [rag.embed([case["query"]])[0] for case in cases]
+        weight = float(os.environ.get("HYBRID_WEIGHT", "0.3"))
+        rates = {}
+        for label, w in (("vector", 0.0), ("hybrid", weight)):
+            hits = 0
+            for case, qvec in zip(cases, qvecs, strict=True):
+                ranked = rag.search_index(conn, qvec, top_k, query=case["query"], hybrid_weight=w)
+                found = [Path(path).name for _, path, _, _ in ranked]
+                ok = case["expected"] in found
+                hits += ok
+                if label == "hybrid" or not ok:
+                    print(f"{'PASS' if ok else 'FAIL'}  [{label}] {case['query']!r} -> {found}")
+            rates[label] = hits / len(cases)
+            print(f"hit@{top_k} {label}: {hits}/{len(cases)} = {rates[label]:.0%}")
         conn.close()
 
-    rate = hits / len(cases)
-    print(f"hit@{top_k}: {hits}/{len(cases)} = {rate:.0%} (threshold {threshold:.0%})")
+    rate = rates["hybrid"]
+    print(f"gate (hybrid): {rate:.0%} vs threshold {threshold:.0%}")
     return 0 if rate >= threshold else 1
 
 

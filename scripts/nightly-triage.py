@@ -263,11 +263,25 @@ def complete(messages):
         raise
 
 
+def refresh_rag_index():
+    """Best-effort re-index so semantic search is fresh; never fails the run."""
+    url = os.environ.get("RAG_URL", "http://localhost:8000/rag_ops") + "/index_sources"
+    req = urllib.request.Request(
+        url, data=b"{}", headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            print(f"rag index: {json.load(r)}")
+    except (OSError, ValueError) as e:
+        print(f"rag index skipped: {e}", file=sys.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-iters", type=int, default=8)
     ap.add_argument("--day", default=None)
     args = ap.parse_args()
+
+    refresh_rag_index()
 
     if args.day:
         globals()["_DAY"] = args.day
