@@ -16,7 +16,17 @@
         "REPORTS_DIR": "/data/agent-reports",
         "EVAL_FILE": "/data/eval/history.jsonl",
         "WORKSPACE": "/workspace",
-        "OLLAMA_URL": "http://ollama:11434"
+        "OLLAMA_URL": "http://host.docker.internal:11434"
+      }
+    },
+    "rag_ops": {
+      "command": "python",
+      "args": ["/opt/mcp/rag_ops.py"],
+      "env": {
+        "RAG_SOURCES": "/repo:/projects",
+        "RAG_DB": "/workspace/.rag/index.db",
+        "OLLAMA_URL": "http://host.docker.internal:11434",
+        "EMBED_MODEL": "nomic-embed-text"
       }
     },
     "projects_ops": {

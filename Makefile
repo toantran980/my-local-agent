@@ -49,6 +49,9 @@ eval:
 eval-history:
 	wsl bash -lc 'cd "$${MY_LOCAL_AGENT_ROOT:-$(ROOT)}" && python3 scripts/eval-summary.py'
 
+eval-rag:
+	wsl bash -lc 'cd "$${MY_LOCAL_AGENT_ROOT:-$(ROOT)}" && python3 scripts/eval-rag.py'
+
 # ── Cron / nightly ──────────────────────────────────────────────
 cron-install:
 	wsl bash -lc 'cd "$${MY_LOCAL_AGENT_ROOT:-$(ROOT)}" && bash scripts/install-cron.sh'
@@ -112,6 +115,7 @@ help:
 	@echo "Eval:"
 	@echo "  make eval         - Run eval suite + summary"
 	@echo "  make eval-history - Show eval history trend"
+	@echo "  make eval-rag     - Retrieval hit-rate eval (needs nomic-embed-text)"
 	@echo ""
 	@echo "Cron / Nightly:"
 	@echo "  make cron-install - Install 5 PM cron"

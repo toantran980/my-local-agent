@@ -1,0 +1,7 @@
+[
+  { "query": "Which port does the Ollama API use and is it authenticated?", "expected": "network.md" },
+  { "query": "When does the scheduled daily summary job run?", "expected": "triage.md" },
+  { "query": "Will a 30B model fit on my graphics card?", "expected": "vram.md" },
+  { "query": "How many steps can the agent take and how are passwords hidden in logs?", "expected": "safety.md" },
+  { "query": "How do I change the time of the nightly report?", "expected": "triage.md" }
+]
