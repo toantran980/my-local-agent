@@ -16,6 +16,7 @@ Env overrides:
   RERANK           1 = have an LLM re-order the top candidates (default 0, adds latency)
   RERANK_MODEL     chat model used for reranking (default qwen3:8b)
   RERANK_CANDIDATES  how many hits to rerank before cutting to k (default 15)
+  RERANK_WEIGHT    LLM share of the final score, 0-1 (default 0.3)
 
 Markdown files are split by heading; other files use fixed-size windows.
 """
@@ -218,16 +219,23 @@ def llm_scores(query: str, texts: list[str]) -> list[int]:
 
 
 def rerank(query: str, hits: list, grade=llm_scores) -> list:
-    """Re-order hits by LLM relevance; ties keep retrieval order. Falls back on any failure."""
+    """Re-order hits by LLM grade blended with the retrieval score; falls back on any failure.
+
+    The LLM share (RERANK_WEIGHT, default 0.3) is a 0-1 grade, so a strong retrieval match
+    can only be overturned by a clearly better passage, not by LLM noise.
+    """
     if not hits[1:]:
         return hits
     try:
-        scores = grade(query, [h[3] for h in hits])
+        scores = grade(query, [f"({Path(h[1]).name}) {h[3]}" for h in hits])
     except (OSError, ValueError, KeyError, TypeError):
         return hits
     if len(scores) != len(hits) or not all(isinstance(s, int | float) for s in scores):
         return hits
-    order = sorted(range(len(hits)), key=lambda i: (-scores[i], i))
+    weight = float(_env("RERANK_WEIGHT", "0.3"))
+    blended = [(1 - weight) * hits[i][0] + weight * min(max(scores[i], 0), 10) / 10
+               for i in range(len(hits))]
+    order = sorted(range(len(hits)), key=lambda i: (-blended[i], i))
     return [hits[i] for i in order]
 
 @mcp.tool()

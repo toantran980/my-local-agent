@@ -4,7 +4,7 @@ Next steps, best fit first. Check items off as they land.
 
 ## Applied AI (agent and RAG quality)
 
-- [x] **Reranking**: opt-in LLM rerank (`RERANK=1`, `RERANK_MODEL`, `RERANK_CANDIDATES`) with fallback on failure. Harder retrieval eval (28 queries, 18 docs) now separates the modes: vector 75%, hybrid 89%, reranked 89%. Next: tune the reranker prompt or try a larger reranker model.
+- [x] **Reranking**: opt-in LLM rerank (`RERANK=1`, `RERANK_MODEL`, `RERANK_CANDIDATES`) with fallback on failure. Harder retrieval eval (28 queries, 18 docs) now separates the modes: vector 75%, hybrid 89%, reranked 93% (LLM grade blended at weight 0.3 with file names shown; weights 0.5 and 0.7 did worse). Reranking stays opt-in; next: try a larger reranker model.
 - [ ] **Tool-use eval (LLM-as-judge)**: replay `.agent/audit/` runs and score tool choice, wasted
   steps and task completion. Use it to measure reflection and the planner.
 - [X] **Guardrails**: tool arguments are validated against their schema and errors go back to the model; sampling (temperature/seed/max_tokens) is now actually applied on `/v1`.
