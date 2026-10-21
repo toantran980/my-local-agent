@@ -1,10 +1,14 @@
 services:
   # ---------------------------------------------------------------
-  # 1. Inference backend: Ollama (start here on a 5080)
+  # 1. Inference backend: Ollama in Docker (OPTIONAL; off by default)
+  #    Default setup uses the Ollama running on the host (port 11434), and
+  #    both would fight for that port. To use the container instead, quit the
+  #    host Ollama, then: docker compose --profile ollama up -d ollama
   # ---------------------------------------------------------------
   ollama:
     image: ollama/ollama:latest
     container_name: local_ollama
+    profiles: ["ollama"]
     restart: unless-stopped
     ports:
       # bind to localhost only - the Ollama API has NO auth
@@ -28,12 +32,14 @@ services:
               capabilities: [gpu]
 
   # ---------------------------------------------------------------
-  # 2. Chat UI + tool surface: Open WebUI
+  # 2. OPTIONAL chat UI: Open WebUI (disabled by default; terminal use)
+  #    Enable: docker compose --profile webui up -d open-webui
   #    Browser: http://localhost:3000  (first signup = admin)
   # ---------------------------------------------------------------
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
+    profiles: ["webui"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:8080"
