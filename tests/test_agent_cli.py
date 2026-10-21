@@ -3,6 +3,7 @@ import io
 import json
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -12,6 +13,7 @@ from agent_cli import (
     apply_pending_writes,
     finish_run,
     is_sensitive_path,
+    post,
     post_stream,
     resolve_repo_path,
     run_agent,
@@ -207,6 +209,14 @@ class AgentFeatureTests(unittest.TestCase):
             finish_run(result, "agent", self.repo, apply=False)
         self.assertIn("answer", out.getvalue())
         self.assertNotIn("Plan saved", out.getvalue())
+
+    def test_unknown_model_gives_actionable_error(self):
+        error = urllib.error.HTTPError("http://x", 404, "Not Found", {}, io.BytesIO(b"{}"))
+        with mock.patch("agent_cli.urllib.request.urlopen", side_effect=error):
+            with self.assertRaises(RuntimeError) as caught:
+                post("http://x", {"model": "qwen3.8", "messages": []})
+        self.assertIn("qwen3.8", str(caught.exception))
+        self.assertIn("ollama list", str(caught.exception))
 
     def test_streamed_answer_is_not_printed_twice(self):
         result = RunResult("hi", {}, self.repo / "a.jsonl", streamed=True)

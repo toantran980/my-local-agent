@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +36,7 @@ DEFAULT_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "qwen3:8b")
 RAG_URL = os.environ.get("RAG_URL", "http://localhost:8000/rag_ops")
 MAX_TOOL_STEPS = 10
+HTTP_NOT_FOUND = 404
 MAX_FILE_BYTES = 32_000
 
 # Constants
@@ -392,6 +394,20 @@ def system_prompt(mode: str, apply: bool) -> str:
     return "\n".join(rules)
 
 
+def _open_chat(request: urllib.request.Request, model: str):
+    """urlopen with Ollama HTTP errors turned into messages a user can act on."""
+    try:
+        return urllib.request.urlopen(request, timeout=300)  # noqa: S310
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        if exc.code == HTTP_NOT_FOUND:
+            raise RuntimeError(
+                f"model '{model}' not found in Ollama. Check the name with `ollama list` "
+                f"(e.g. qwen3:8b) or fetch it with `ollama pull {model}`."
+            ) from exc
+        raise RuntimeError(f"Ollama returned HTTP {exc.code}: {detail}") from exc
+
+
 def post(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     # Ensure sufficient context and output tokens to avoid truncation
     payload.setdefault("options", {})
@@ -402,7 +418,7 @@ def post(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=300) as response:
+    with _open_chat(request, str(payload.get("model", ""))) as response:
         return json.load(response)
 
 
@@ -420,7 +436,7 @@ def post_stream(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     content: list[str] = []
     calls: dict[int, dict[str, Any]] = {}
     thinking_notice = False
-    with urllib.request.urlopen(request, timeout=300) as response:
+    with _open_chat(request, str(payload.get("model", ""))) as response:
         for raw in response:
             line = raw.decode("utf-8").strip()
             if not line.startswith("data:"):
