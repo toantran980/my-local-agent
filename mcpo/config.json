@@ -13,7 +13,7 @@
       "args": ["/opt/mcp/local_ops.py"],
       "env": {
         "REPO_DIR": "/repo",
-        "REPORTS_DIR": "/data/agent-reports",
+        "REPORTS_DIR": "/data/reports",
         "EVAL_FILE": "/data/eval/history.jsonl",
         "WORKSPACE": "/workspace",
         "OLLAMA_URL": "http://host.docker.internal:11434"

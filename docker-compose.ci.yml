@@ -45,7 +45,7 @@ services:
       - ./workspace:/workspace
       - ./mcp:/opt/mcp
       - ./mcpo/config.json:/config/config.json:ro
-      - ./agent-reports:/data/agent-reports
+      - ./reports:/data/reports:ro
       - ./eval:/data/eval
       - .:/repo:ro
 

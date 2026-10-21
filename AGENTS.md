@@ -22,15 +22,11 @@ a nightly triage job.
 | `scripts/` | smoke test, eval harness, nightly triage, cron, audit viewer |
 | `eval/` | `cases/*.json`, `fixtures/`, `rag/` (retrieval eval), `history.jsonl` |
 | `tests/` | pytest suite for `agent_cli.py` and `rag_ops.py` |
-| `reports/` | Nightly triage output, `YYYY-MM-DD.md` (gitignored) |
-| `agent-reports/` | Mounted into `mcpo` at `/data/agent-reports` (gitignored) |
+| `reports/` | Nightly triage output, `YYYY-MM-DD.md` (gitignored); mounted read-only into `mcpo` at `/data/reports` |
+| `agent-reports/` | Legacy, now unused (gitignored) |
 | `.agent/audit/` | Per-run JSONL audit trail (gitignored) |
 | `workspace/` | Agent file sandbox, the only writable MCP mount |
 | `docs/` | Framework analysis, not operational docs |
-
-`reports/` and `agent-reports/` are distinct. The nightly job writes to
-`reports/`; `mcpo` mounts `agent-reports/`. As a result the `local_ops`
-`latest_nightly_report` tool reads an empty directory — known inconsistency.
 
 ## Commands
 
@@ -50,8 +46,9 @@ python3 -m pytest -q           # unit tests
 ruff check . && shellcheck scripts/*.sh    # what CI runs
 ```
 
-Direct equivalents, e.g. `docker exec local_ollama ollama ps` for GPU residency
-and `docker exec local_ollama ollama pull qwen3:8b` to fetch a model.
+Direct equivalents: `ollama ps` for GPU residency and `ollama pull qwen3:8b` to
+fetch a model (prefix with `docker exec local_ollama` only when using the
+opt-in Ollama container).
 
 ## Environment
 

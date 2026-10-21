@@ -11,7 +11,7 @@ an OpenAPI tool server at http://mcpo:8000/local_ops.
 
 Env overrides (defaults match the compose mounts):
   REPO_DIR       git tools        (default /repo)
-  REPORTS_DIR    nightly          (default /data/agent-reports)
+  REPORTS_DIR    nightly          (default /data/reports)
   EVAL_FILE      history jsonl    (default /data/eval/history.jsonl)
   WORKSPACE      sandbox          (default /workspace)
   PROJECTS_DIR   project dirs     (default /projects)
@@ -65,8 +65,8 @@ def git_state(repo_dir: str | None = None) -> str:
 
 @mcp.tool()
 def latest_nightly_report(max_chars: int = 4000) -> str:
-    """Return the most recent nightly triage report from agent-reports/."""
-    d = Path(_env("REPORTS_DIR", "/data/agent-reports"))
+    """Return the most recent nightly triage report from reports/."""
+    d = Path(_env("REPORTS_DIR", "/data/reports"))
     files = sorted(d.glob("*.md")) if d.is_dir() else []
     if not files:
         return "No nightly reports yet. Run scripts/nightly-triage.sh first."

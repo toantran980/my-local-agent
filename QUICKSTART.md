@@ -95,7 +95,7 @@ is the project's reliability answer.
 Retrieval check for the `rag_ops` server (pull the embedding model first):
 
 ```bash
-docker exec local_ollama ollama pull nomic-embed-text
+ollama pull nomic-embed-text      # host Ollama (default setup)
 python3 scripts/eval-rag.py
 ```
 

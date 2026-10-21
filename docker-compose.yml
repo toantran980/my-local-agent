@@ -67,7 +67,7 @@ services:
       # self-authored local_ops MCP server + the state it reports on
       - ./mcp:/opt/mcp
       - ./mcpo/config.json:/config/config.json:ro    # mount updated config
-      - ./agent-reports:/data/agent-reports
+      - ./reports:/data/reports:ro
       - ./eval:/data/eval
       # read-only view of this repo (swap for the repo you want git_state
       # to inspect by default; e.g. - /home/you/myapp:/repo:ro)

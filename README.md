@@ -48,8 +48,8 @@ mcpo exposes five MCP servers, defined in [`mcpo/config.json`](mcpo/config.json)
 | `rag_ops` | [`mcp/rag_ops.py`](mcp/rag_ops.py) | `index_sources`, `semantic_search` |
 
 Mounted host paths inside `mcpo`: the repo at `/repo` (read-only), `./workspace`
-at `/workspace`, `./eval` at `/data/eval`, `./agent-reports` at
-`/data/agent-reports`. See [PROJECTS.md](PROJECTS.md) to enable `/projects`,
+at `/workspace`, `./eval` at `/data/eval`, `./reports` at `/data/reports`
+(read-only). See [PROJECTS.md](PROJECTS.md) to enable `/projects`,
 `/configs`, and `/logs`.
 
 Register them in Open WebUI: **Admin Panel → Settings → Integrations →
@@ -64,7 +64,7 @@ directories are skipped. Run `index_sources` first (re-runs only embed changed
 files), then `semantic_search(query, k=5)`.
 
 ```bash
-docker exec local_ollama ollama pull nomic-embed-text
+ollama pull nomic-embed-text      # host Ollama (default setup)
 curl -X POST http://localhost:8000/rag_ops/index_sources
 curl -X POST http://localhost:8000/rag_ops/semantic_search \
   -H "Content-Type: application/json" -d '{"query": "how is VRAM budgeted?"}'
@@ -123,9 +123,8 @@ crontab -l | grep my-local-agent-nightly-triage
 
 Set `DRAFT_PR=1` plus `GH_REPO=owner/repo` to also open a draft PR per report.
 
-> **Note:** the nightly job writes to `reports/`, but `mcpo` mounts
-> `./agent-reports` at `/data/agent-reports`. The `latest_nightly_report` tool
-> therefore reads an empty directory. Reports are still readable on the host.
+The `latest_nightly_report` MCP tool reads these reports through a read-only
+`./reports` mount at `/data/reports`.
 
 ---
 

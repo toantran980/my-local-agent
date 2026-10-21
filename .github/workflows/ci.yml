@@ -38,6 +38,24 @@ jobs:
             fi
           done
 
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: pip install pytest "mcp<2"
+
+      - name: Run unit tests
+        run: python -m pytest -q tests
+
   smoke-test:
     name: Smoke Test
     runs-on: ubuntu-latest
@@ -120,9 +138,18 @@ jobs:
             sleep 2
           done
 
-      - name: Pull model
+      - name: Pull models
         run: |
           curl -s http://localhost:11434/api/pull -d '{"name": "qwen3:0.6b"}'
+          curl -s http://localhost:11434/api/pull -d '{"name": "nomic-embed-text"}'
+
+      - name: Install RAG eval dependencies
+        run: pip install "mcp<2"
+
+      - name: Run retrieval eval
+        env:
+          OLLAMA_URL: http://localhost:11434
+        run: python3 scripts/eval-rag.py
 
       - name: Run eval suite
         env:

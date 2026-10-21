@@ -51,7 +51,7 @@ REPLY=$(curl -fsS "$OLLAMA_URL/v1/chat/completions" \
 echo "    reply: $REPLY"
 
 echo "==> 3. MCP bridge (mcpo) reachable"
-for srv in local_ops filesystem fetch projects_ops; do
+for srv in local_ops filesystem fetch projects_ops rag_ops; do
   echo "    - $srv:"
   curl -fsS "http://localhost:8000/$srv/openapi.json" \
     | python3 -c "import json,sys; d=json.load(sys.stdin); print('        '+', '.join(sorted(p.lstrip('/') for p in d['paths'])))"
