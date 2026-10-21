@@ -163,7 +163,7 @@ reliability and latency trend over time. Run the suite once per model, then the
 summary's comparison table shows pass rate and average seconds per run for each.
 
 Retrieval quality has its own check. [`scripts/eval-rag.py`](scripts/eval-rag.py)
-indexes `eval/rag/docs/` and measures hit@1 for the 16 queries in
+indexes `eval/rag/docs/` and measures hit@1 for the 28 queries in
 `eval/rag/cases.json`, reporting vector-only and hybrid side by side and exiting
 non-zero when the hybrid rate is below `THRESHOLD` (default 0.8):
 

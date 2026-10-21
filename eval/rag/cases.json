@@ -14,5 +14,17 @@
   { "query": "Which port is the chat website on?", "expected": "ports.md" },
   { "query": "Why does the container fail to start when Ollama is already installed on Windows?", "expected": "ports.md" },
   { "query": "My reasoning model returns an empty answer, why?", "expected": "models.md" },
-  { "query": "What is the default context window?", "expected": "models.md" }
+  { "query": "What is the default context window?", "expected": "models.md" },
+  { "query": "Which command shows whether a model got pushed out of graphics memory?", "expected": "gpu-monitoring.md" },
+  { "query": "How long are old scheduled-job output files kept?", "expected": "log-rotation.md" },
+  { "query": "How do I get the default model on a Linux box?", "expected": "ollama-install.md" },
+  { "query": "What tells the model not to trust its own past notes?", "expected": "system-prompt.md" },
+  { "query": "Why is re-running the indexer quick the second time?", "expected": "embedding-cache.md" },
+  { "query": "The search database seems broken, how do I fix it?", "expected": "index-recovery.md" },
+  { "query": "How long does the agent wait before giving up on the model?", "expected": "timeouts.md" },
+  { "query": "The nightly job never ran on my Windows machine", "expected": "windows-scheduling.md" },
+  { "query": "Does the audit trail get cleaned up on its own?", "expected": "log-rotation.md" },
+  { "query": "Where is the vector database stored on disk?", "expected": "embedding-cache.md" },
+  { "query": "How do I force everything to be re-indexed?", "expected": "embedding-cache.md" },
+  { "query": "What happens if embedding takes too long?", "expected": "timeouts.md" }
 ]
