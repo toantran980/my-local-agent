@@ -131,6 +131,7 @@ Every constraint below is enforced in code, not by convention:
 | `filesystem` | `/workspace` | read/write | 32KB read, 1MB write |
 | `projects_ops` | `/projects`, `/configs`, `/logs` | read-only | 32KB read |
 | `local_ops` | `/repo`, `/data`, `/workspace` | read-only | 32KB read |
+| `rag_ops` | `/repo`, `/projects` | read-only; writes only its index under `/workspace/.rag` | 200KB per file indexed |
 | `agent_cli.py` | `--repo` | read; write with `--apply` | 32KB read, 1MB write |
 
 ---

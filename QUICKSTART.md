@@ -25,12 +25,13 @@ wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && docker compose up -d --buil
 
 | Service | Port | Purpose |
 | --- | --- | --- |
-| ollama | 11434 | Inference |
-| open-webui | 3000 | Chat UI |
-| mcpo | 8000 | MCP → OpenAPI bridge (4 servers) |
+| ollama | 11434 | Inference. Default: the Ollama on your host. Docker container is opt-in: `--profile ollama` (quit host Ollama first) |
+| open-webui | 3000 | Chat UI, opt-in: `docker compose --profile webui up -d open-webui` |
+| mcpo | 8000 | MCP → OpenAPI bridge (5 servers) |
 
-The first run pulls a model (~5–6 GB). Later runs are instant. From Windows you
-can also use `make up` if you have `make` in WSL2.
+The first run pulls a model (~5–6 GB). Later runs are instant. `make up` works
+only where `make` is installed (inside WSL2, not native Windows PowerShell).
+Port 11434 must be free: quit any Ollama app running on the Windows host first.
 
 ## 2. Verify
 
@@ -46,7 +47,7 @@ VRAM-resident, and `agent_cli.py ask` works.
 ## 3. Talk to it
 
 ```bash
-# Chat UI
+# Chat UI (only if you enabled the webui profile)
 start http://localhost:3000
 
 # Or the OpenAI-compatible API from a Windows terminal
@@ -88,8 +89,15 @@ You should see the tool loop run (`git_status`, `grep`, `gpu_status`,
 wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && bash scripts/run-eval.sh && python3 scripts/eval-summary.py'
 ```
 
-Expect `6/6 passed` and a pass-rate trend from `eval/history.jsonl`. That number
+Expect `7/7 passed` and a pass-rate trend from `eval/history.jsonl`. That number
 is the project's reliability answer.
+
+Retrieval check for the `rag_ops` server (pull the embedding model first):
+
+```bash
+docker exec local_ollama ollama pull nomic-embed-text
+python3 scripts/eval-rag.py
+```
 
 ---
 

@@ -17,10 +17,11 @@ a nightly triage job.
 | `agent_cli.py` | Terminal agent: `ask` / `plan` / `agent` modes |
 | `mcp/local_ops.py` | MCP server: git, GPU, system, eval introspection |
 | `mcp/projects_ops.py` | MCP server: read-only project file access |
-| `mcpo/` | MCP→OpenAPI bridge image + `config.json` (4 servers) |
+| `mcp/rag_ops.py` | MCP server: local RAG (Ollama embeddings + SQLite index) |
+| `mcpo/` | MCP→OpenAPI bridge image + `config.json` (5 servers) |
 | `scripts/` | smoke test, eval harness, nightly triage, cron, audit viewer |
-| `eval/` | `cases/*.json`, `fixtures/`, `history.jsonl` |
-| `tests/` | pytest suite for `agent_cli.py` |
+| `eval/` | `cases/*.json`, `fixtures/`, `rag/` (retrieval eval), `history.jsonl` |
+| `tests/` | pytest suite for `agent_cli.py` and `rag_ops.py` |
 | `reports/` | Nightly triage output, `YYYY-MM-DD.md` (gitignored) |
 | `agent-reports/` | Mounted into `mcpo` at `/data/agent-reports` (gitignored) |
 | `.agent/audit/` | Per-run JSONL audit trail (gitignored) |
@@ -37,8 +38,9 @@ a nightly triage job.
 make up / down / ps / logs      # stack lifecycle
 make smoke                      # health check: ollama, mcpo, GPU residency, agent_cli
 make gpu                        # model VRAM residency
-make eval                       # 6-case eval suite + summary
+make eval                       # 7-case eval suite + summary
 make eval-history               # pass-rate trend
+make eval-rag                   # retrieval hit@1 for rag_ops
 make cron-install / cron-run    # nightly triage
 make agent-ask 'question'       # read-only
 make agent-apply 'task'         # writes under --repo
@@ -69,6 +71,8 @@ Do not violate these — they are enforced in code:
 - Sensitive paths (`.env`, keys, certs) are blocked from read and write.
 - Credentials are redacted before anything is written to the audit log.
 - `projects_ops` is read-only; `/projects`, `/configs`, `/logs` mount `:ro`.
+- `rag_ops` never writes to sources; it only writes its index to `/workspace/.rag`
+  and skips sensitive files.
 
 ## VRAM (16GB card)
 
