@@ -62,8 +62,10 @@ body = json.dumps({
     "model": model,
     "messages": [{"role": "user", "content": prompt}],
     "stream": False,
-    "options": {"temperature": 0, "num_predict": int(os.environ.get("NUM_PREDICT", "2048")),
-                "num_ctx": 8192},
+    # /v1 ignores "options": sampling settings must be top-level to take effect
+    "temperature": 0,
+    "seed": 0,
+    "max_tokens": int(os.environ.get("NUM_PREDICT", "2048")),
 }).encode()
 req = urllib.request.Request(f"{url}/v1/chat/completions", data=body,
                              headers={"Content-Type": "application/json"})
