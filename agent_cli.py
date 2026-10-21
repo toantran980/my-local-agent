@@ -349,6 +349,31 @@ def tool_definitions(mode: str) -> list[dict[str, Any]]:
     return tools
 
 
+JSON_TYPES: dict[str, type | tuple[type, ...]] = {
+    "string": str, "integer": int, "number": (int, float), "boolean": bool,
+}
+
+
+def validate_arguments(name: str, arguments: Any, mode: str) -> str | None:
+    """Check a tool call against its declared schema; return a model-facing error or None."""
+    schemas = {t["function"]["name"]: t["function"]["parameters"] for t in tool_definitions(mode)}
+    schema = schemas.get(name)
+    if schema is None:
+        return f"ERROR: unknown tool '{name}'. Available tools: {', '.join(sorted(schemas))}"
+    if not isinstance(arguments, dict):
+        return f"ERROR: arguments for {name} must be a JSON object; retry with valid JSON"
+    missing = [key for key in schema.get("required", []) if key not in arguments]
+    if missing:
+        return f"ERROR: {name} is missing required argument(s): {', '.join(missing)}"
+    for key, value in arguments.items():
+        expected = schema["properties"].get(key, {}).get("type")
+        wanted = JSON_TYPES.get(expected or "")
+        bad_bool = isinstance(value, bool) and expected in ("integer", "number")
+        if wanted and (bad_bool or not isinstance(value, wanted)):
+            return f"ERROR: argument '{key}' of {name} must be {expected}"
+    return None
+
+
 def _is_write_refusal(result: str) -> bool:
     """True only for write_file refusals that a retry cannot fix (path/sensitive)."""
     return result.startswith("ERROR: ") and any(
@@ -408,11 +433,13 @@ def _open_chat(request: urllib.request.Request, model: str):
         raise RuntimeError(f"Ollama returned HTTP {exc.code}: {detail}") from exc
 
 
+def _with_sampling(payload: dict[str, Any]) -> dict[str, Any]:
+    """Ollama's /v1 endpoint ignores "options"; sampling fields must be top-level."""
+    return {"temperature": 0, "seed": 0, "max_tokens": 2048, **payload}
+
+
 def post(url: str, payload: dict[str, Any]) -> dict[str, Any]:
-    # Ensure sufficient context and output tokens to avoid truncation
-    payload.setdefault("options", {})
-    payload["options"].setdefault("num_predict", 2048)
-    payload["options"].setdefault("num_ctx", 8192)
+    payload = _with_sampling(payload)
     request = urllib.request.Request(
         url.rstrip("/") + "/v1/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -424,10 +451,7 @@ def post(url: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 def post_stream(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Like post(), but prints answer tokens as they arrive; returns the same shape."""
-    payload = {**payload, "stream": True}
-    payload.setdefault("options", {})
-    payload["options"].setdefault("num_predict", 2048)
-    payload["options"].setdefault("num_ctx", 8192)
+    payload = _with_sampling({**payload, "stream": True})
     request = urllib.request.Request(
         url.rstrip("/") + "/v1/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -594,7 +618,6 @@ def run_agent(  # noqa: PLR0913, PLR0917
         "messages": messages,
         "tools": tool_definitions(mode),
         "stream": False,
-        "options": {"temperature": 0},
     },
 )
         message = response["choices"][0]["message"]
@@ -637,9 +660,10 @@ def run_agent(  # noqa: PLR0913, PLR0917
             try:
                 arguments = json.loads(function.get("arguments") or "{}")
             except json.JSONDecodeError:
-                arguments = {}
+                arguments = None
             name = function.get("name", "")
-            result = tools.call(name, arguments)
+            invalid = validate_arguments(name, arguments, mode)
+            result = invalid or tools.call(name, arguments)
             audit(
     audit_file,
     {

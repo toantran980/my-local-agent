@@ -20,6 +20,7 @@ from agent_cli import (
     run_planned,
     system_prompt,
     tool_definitions,
+    validate_arguments,
 )
 
 
@@ -143,6 +144,31 @@ class AgentFeatureTests(unittest.TestCase):
             result = run_agent(mode, "task", self.repo, "m", "http://x", apply=False)
         return result, post
 
+    def test_validate_arguments_catches_bad_calls(self):
+        self.assertIsNone(validate_arguments("read_file", {"path": "a.py"}, "ask"))
+        self.assertIn("unknown tool", validate_arguments("rm_rf", {}, "ask"))
+        self.assertIn("missing", validate_arguments("read_file", {}, "ask"))
+        self.assertIn("JSON object", validate_arguments("read_file", None, "ask"))
+        self.assertIn("must be string", validate_arguments("read_file", {"path": 3}, "ask"))
+        self.assertIn("must be integer", validate_arguments(
+            "semantic_search", {"query": "q", "k": True}, "ask"))
+        self.assertIn("unknown tool", validate_arguments("write_file", {}, "ask"))
+
+    def test_malformed_tool_call_is_reported_back_to_the_model(self):
+        bad = {"id": "1", "function": {"name": "read_file", "arguments": "{not json"}}
+        result, post = self._agent([_reply(calls=[bad]), _reply("done")], [], mode="ask")
+        self.assertEqual(result.answer, "done")
+        sent = post.call_args_list[-1].args[1]["messages"]
+        self.assertTrue(any("JSON object" in str(m.get("content")) for m in sent))
+
+    def test_requests_use_top_level_sampling_fields(self):
+        payload = {}
+        with mock.patch("agent_cli._open_chat") as opened:
+            opened.return_value.__enter__.return_value = io.BytesIO(b"{}")
+            post("http://x", {"model": "m", "messages": []})
+            payload = json.loads(opened.call_args.args[0].data)
+        self.assertEqual((payload["temperature"], payload["seed"]), (0, 0))
+        self.assertNotIn("options", payload)
     def test_reflection_retries_once_then_passes(self):
         replies = [_reply(calls=[_write_call()]), _reply("done"),
                    _reply(calls=[_write_call(content="x = 2\n")]), _reply("fixed")]

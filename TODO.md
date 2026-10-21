@@ -8,13 +8,17 @@ Next steps, best fit first. Check items off as they land.
   cross-encoder. Make the retrieval eval hard enough to tell vector-only from hybrid from reranked.
 - [ ] **Tool-use eval (LLM-as-judge)**: replay `.agent/audit/` runs and score tool choice, wasted
   steps and task completion. Use it to measure reflection and the planner.
-- [ ] **Guardrails / structured output**: JSON-schema tool calls with validation and a retry on
-  malformed output (helps small models like `qwen3.5:4b`).
+- [x] **Guardrails**: tool arguments are validated against their schema and errors go back to the model; sampling (temperature/seed/max_tokens) is now actually applied on `/v1`.
 - [ ] **Query rewriting / HyDE**: rewrite the question or generate a hypothetical answer before embedding.
 - [ ] **Model routing / self-consistency**: easy prompts to the 4B model, hard ones to `qwen3:14b`,
   or majority vote over several samples.
 - [ ] **Conversation summarization**: compress old turns to stay inside the 16k context.
-- [ ] **Nightly anomaly detection**: statistical checks on GPU, VRAM and latency trends.
+- [ ] **Citation verification**: check each quoted `[file:chunk]` appears in the retrieved chunks; flag or retry if not.
+- [ ] **Code-aware RAG**: chunk `.py` files by function/class with `ast` instead of by markdown heading.
+- [ ] **Native structured outputs**: use Ollama's `format` JSON schema (e.g. for plans and judge scores) so output can't be malformed.
+- [ ] **Memory consolidation**: merge/expire `workspace/memory/` entries and keep only runs with a verified outcome.
+- [ ] **Semantic cache**: reuse an answer when a new prompt is very close to an earlier one (existing embeddings).
+- [ ] **Planner/executor split**: `qwen3:14b` writes the plan, `qwen3.5:4b` runs the steps.- [ ] **Nightly anomaly detection**: statistical checks on GPU, VRAM and latency trends.
 
 ## Course topic coverage
 
