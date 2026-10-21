@@ -9,7 +9,6 @@ __pycache__/
 # Local runtime output
 logs/*
 reports/*
-agent-reports/*
 .agent/
 debug.log
 workspace/*

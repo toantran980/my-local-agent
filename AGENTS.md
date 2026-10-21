@@ -23,7 +23,6 @@ a nightly triage job.
 | `eval/` | `cases/*.json`, `fixtures/`, `rag/` (retrieval eval), `history.jsonl` |
 | `tests/` | pytest suite for `agent_cli.py` and `rag_ops.py` |
 | `reports/` | Nightly triage output, `YYYY-MM-DD.md` (gitignored); mounted read-only into `mcpo` at `/data/reports` |
-| `agent-reports/` | Legacy, now unused (gitignored) |
 | `.agent/audit/` | Per-run JSONL audit trail (gitignored) |
 | `workspace/` | Agent file sandbox, the only writable MCP mount |
 | `docs/` | Framework analysis, not operational docs |
