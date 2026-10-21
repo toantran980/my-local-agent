@@ -219,7 +219,8 @@ class AgentFeatureTests(unittest.TestCase):
         staged = {Path("a.py"): "x"}
         results = [
             RunResult("plan one", {}, self.repo / "a.jsonl"),
-            RunResult("tried", staged, self.repo / "a.jsonl", tests_passed=False, test_output="exit=1"),
+            RunResult("tried", staged, self.repo / "a.jsonl", tests_passed=False,
+                      test_output="exit=1"),
             RunResult("plan two", {}, self.repo / "a.jsonl"),
             RunResult("done", staged, self.repo / "a.jsonl", tests_passed=True),
         ]

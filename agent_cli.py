@@ -100,6 +100,11 @@ class LocalTools:
         match = re.search(r"exit=(-?\d+)", self.test_results[-1])
         return match is not None and match.group(1) == "0"
 
+    def verified_outcome(self) -> bool | None:
+        """Last test result, ignoring failures the agent's own changes didn't cause."""
+        passed = self.last_test_passed()
+        return None if passed is False and not self.caused_by_staged_changes() else passed
+
     def caused_by_staged_changes(self) -> bool:
         """True when the last failing test output mentions a file the agent staged.
 
@@ -594,9 +599,7 @@ def run_agent(  # noqa: PLR0913, PLR0917
             audit(audit_file, {"event": "run_finished", "mode": mode, "answer": answer})
             remember(mode, model, prompt, answer)
             streamed = stream and bool(message.get("content"))
-            tests_passed = tools.last_test_passed()
-            if tests_passed is False and not tools.caused_by_staged_changes():
-                tests_passed = None
+            tests_passed = tools.verified_outcome()
             outcome = {
                 "tests_passed": tests_passed,
                 "test_output": tools.test_results[-1] if tools.test_results else "",
