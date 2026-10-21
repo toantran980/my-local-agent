@@ -13,6 +13,9 @@ Env overrides:
   CHUNK_OVERLAP    overlap in chars       (default 200)
   MAX_FILE_BYTES   skip bigger files      (default 200000)
   HYBRID_WEIGHT    keyword share of the score, 0 = vector only (default 0.3)
+  RERANK           1 = have an LLM re-order the top candidates (default 0, adds latency)
+  RERANK_MODEL     chat model used for reranking (default qwen3:8b)
+  RERANK_CANDIDATES  how many hits to rerank before cutting to k (default 15)
 
 Markdown files are split by heading; other files use fixed-size windows.
 """
@@ -194,6 +197,39 @@ def search_index(conn: sqlite3.Connection, qvec: list[float], k: int,
     return scored[:k]
 
 
+def llm_scores(query: str, texts: list[str]) -> list[int]:
+    """Ask a chat model to grade each passage 0-10 for relevance to the query."""
+    listing = "\n\n".join(f"[{i}] {t[:500]}" for i, t in enumerate(texts))
+    prompt = (f"Query: {query}\n\nRate how well each passage answers the query, 0 (irrelevant) "
+              f"to 10 (directly answers). Return one integer per passage, in order.\n\n{listing}")
+    body = json.dumps({
+        "model": _env("RERANK_MODEL", "qwen3:8b"),
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False, "think": False,
+        "format": {"type": "object", "required": ["scores"], "properties": {
+            "scores": {"type": "array", "items": {"type": "integer"}}}},
+        "options": {"temperature": 0, "seed": 0},
+    }).encode()
+    req = urllib.request.Request(
+        f"{_env('OLLAMA_URL', 'http://ollama:11434')}/api/chat", data=body,
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return json.loads(json.load(resp)["message"]["content"])["scores"]
+
+
+def rerank(query: str, hits: list, grade=llm_scores) -> list:
+    """Re-order hits by LLM relevance; ties keep retrieval order. Falls back on any failure."""
+    if not hits[1:]:
+        return hits
+    try:
+        scores = grade(query, [h[3] for h in hits])
+    except (OSError, ValueError, KeyError, TypeError):
+        return hits
+    if len(scores) != len(hits) or not all(isinstance(s, int | float) for s in scores):
+        return hits
+    order = sorted(range(len(hits)), key=lambda i: (-scores[i], i))
+    return [hits[i] for i in order]
+
 @mcp.tool()
 def index_sources() -> str:
     """Build or refresh the search index over the configured source directories.
@@ -250,7 +286,11 @@ def semantic_search(query: str, k: int = 5) -> str:
     try:
         if not conn.execute("SELECT 1 FROM chunks LIMIT 1").fetchone():
             return "Index is empty. Run index_sources first."
-        hits = search_index(conn, embed([query])[0], k, query=query)
+        use_rerank = _env("RERANK", "0") == "1"
+        pool = max(k, int(_env("RERANK_CANDIDATES", "15"))) if use_rerank else k
+        hits = search_index(conn, embed([query])[0], pool, query=query)
+        if use_rerank:
+            hits = rerank(query, hits)[:k]
     finally:
         conn.close()
     return "\n\n".join(f"[{score:.3f}] {path} (chunk {idx})\n{text}"

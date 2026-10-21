@@ -44,6 +44,9 @@ MAX_SEARCH_RESULTS = 80
 MAX_WRITE_SIZE = 1_000_000
 MAX_WRITE_RETRIES = 2
 MAX_REFLECTIONS = 1
+MAX_CITATION_RETRIES = 1
+SOURCE_LINE = re.compile(r"\[\d+\.\d+\] (\S+) \(chunk \d+\)")
+CITATION = re.compile(r"\[([\w.\\/-]+\.\w+)\]")
 MEMORY_ENTRY_CHARS = 800
 MEMORY_ENABLED = os.environ.get("AGENT_MEMORY", "1") != "0"
 # Lands under ./workspace, which is gitignored and visible to rag_ops via the /repo mount.
@@ -96,6 +99,13 @@ class LocalTools:
         self.test_results: list[str] = []
         self.tests_dirty = bool(self.pending_writes)
         self.indexed = False
+        self.sources: set[str] = set()
+
+    def unsupported_citations(self, answer: str) -> list[str]:
+        """Cited files that no tool result in this run actually showed the model."""
+        seen = {Path(s.replace('\\', '/')).name for s in self.sources}
+        cited = dict.fromkeys(CITATION.findall(answer))
+        return [c for c in cited if Path(c.replace('\\', '/')).name not in seen]
 
     def last_test_passed(self) -> bool | None:
         """True/False from the most recent test run, None if tests never ran."""
@@ -133,6 +143,7 @@ class LocalTools:
                 if not path.is_file():
                     return f"ERROR: not a file: {args['path']}"
                 data = path.read_text(encoding="utf-8", errors="replace")
+                self.sources.add(str(args["path"]))
                 return data[:MAX_FILE_BYTES]
             if name == "search":
                 return self._search(str(args["pattern"]), str(args.get("glob", "")))
@@ -240,6 +251,7 @@ class LocalTools:
             )
         except OSError as exc:
             return f"ERROR: RAG service unavailable ({exc}); use search/read_file instead"
+        self.sources.update(SOURCE_LINE.findall(result))
         return result[:MAX_FILE_BYTES]
 
     def _write_file(self, relative: str, content: str) -> str:
@@ -583,7 +595,7 @@ def apply_pending_writes(writes: dict[Path, str]) -> None:
         os.replace(temporary_path, path)
 
 
-def run_agent(  # noqa: PLR0913, PLR0917
+def run_agent(  # noqa: PLR0913, PLR0915, PLR0917
     mode: str, prompt: str, repo: Path, model: str, url: str, apply: bool,
     history: list[dict[str, str]] | None = None,
     stream: bool = False,
@@ -608,6 +620,7 @@ def run_agent(  # noqa: PLR0913, PLR0917
 )
     refusals: dict[tuple[str, str], int] = {}
     reflections = 0
+    citation_retries = 0
     send = post_stream if stream else post
 
     for _ in range(MAX_TOOL_STEPS):
@@ -637,6 +650,20 @@ def run_agent(  # noqa: PLR0913, PLR0917
                 })
                 continue
             answer = message.get("content") or "(model returned no answer)"
+            bad = tools.unsupported_citations(answer)
+            if bad and citation_retries < MAX_CITATION_RETRIES:
+                citation_retries += 1
+                audit(audit_file, {"event": "citation_retry", "unsupported": bad})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        f"You cited {', '.join(bad)}, but no tool result showed you those files. "
+                        "Re-answer using only sources you actually saw, or search first."
+                    ),
+                })
+                continue
+            if bad:
+                answer += "\n\n(unverified citations: " + ", ".join(bad) + ")"
             audit(audit_file, {"event": "run_finished", "mode": mode, "answer": answer})
             remember(mode, model, prompt, answer)
             streamed = stream and bool(message.get("content"))

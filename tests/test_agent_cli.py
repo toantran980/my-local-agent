@@ -169,6 +169,26 @@ class AgentFeatureTests(unittest.TestCase):
             payload = json.loads(opened.call_args.args[0].data)
         self.assertEqual((payload["temperature"], payload["seed"]), (0, 0))
         self.assertNotIn("options", payload)
+    def test_unsupported_citation_triggers_one_retry(self):
+        search = {"id": "1", "function": {"name": "semantic_search",
+                                          "arguments": json.dumps({"query": "vram"})}}
+        hits = "[0.900] /repo/docs/vram.md (chunk 0)\\nbudget"
+        replies = [_reply(calls=[search]), _reply("See [made_up.md]."),
+                   _reply("See [vram.md].")]
+        with mock.patch("agent_cli.LocalTools._rag_post", return_value=hits):
+            result, post = self._agent(replies, [], mode="ask")
+        self.assertEqual(result.answer, "See [vram.md].")
+        self.assertEqual(post.call_count, 3)
+
+    def test_still_unsupported_citation_is_flagged(self):
+        replies = [_reply("See [ghost.md]."), _reply("Still [ghost.md].")]
+        result, _ = self._agent(replies, [], mode="ask")
+        self.assertIn("unverified citations: ghost.md", result.answer)
+
+    def test_answers_without_citations_are_untouched(self):
+        result, post = self._agent([_reply("plain answer")], [], mode="ask")
+        self.assertEqual(result.answer, "plain answer")
+        self.assertEqual(post.call_count, 1)
     def test_reflection_retries_once_then_passes(self):
         replies = [_reply(calls=[_write_call()]), _reply("done"),
                    _reply(calls=[_write_call(content="x = 2\n")]), _reply("fixed")]

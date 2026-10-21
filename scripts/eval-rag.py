@@ -44,10 +44,16 @@ def main() -> int:
         qvecs = [rag.embed([case["query"]])[0] for case in cases]
         weight = float(os.environ.get("HYBRID_WEIGHT", "0.3"))
         rates = {}
-        for label, w in (("vector", 0.0), ("hybrid", weight)):
+        modes = [("vector", 0.0), ("hybrid", weight)]
+        if os.environ.get("RERANK") == "1":
+            modes.append(("reranked", weight))
+        for label, w in modes:
             hits = 0
             for case, qvec in zip(cases, qvecs, strict=True):
-                ranked = rag.search_index(conn, qvec, top_k, query=case["query"], hybrid_weight=w)
+                pool = max(top_k, 15) if label == "reranked" else top_k
+                ranked = rag.search_index(conn, qvec, pool, query=case["query"], hybrid_weight=w)
+                if label == "reranked":
+                    ranked = rag.rerank(case["query"], ranked)[:top_k]
                 found = [Path(path).name for _, path, _, _ in ranked]
                 ok = case["expected"] in found
                 hits += ok

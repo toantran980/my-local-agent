@@ -100,3 +100,21 @@ def test_index_and_search_roundtrip(tmp_path, monkeypatch):
 
     (src / "cook.md").unlink()
     assert "removed 1 stale" in rag.index_sources()
+
+
+def test_rerank_orders_by_score_and_keeps_ties_stable():
+    hits = [(0.9, "a", 0, "A"), (0.8, "b", 0, "B"), (0.7, "c", 0, "C")]
+    out = rag.rerank("q", hits, grade=lambda q, texts: [3, 9, 3])
+    assert [h[1] for h in out] == ["b", "a", "c"]
+
+
+def test_rerank_falls_back_on_errors_and_bad_output():
+    hits = [(0.9, "a", 0, "A"), (0.8, "b", 0, "B")]
+
+    def boom(q, texts):
+        raise OSError("down")
+
+    assert rag.rerank("q", hits, grade=boom) == hits
+    assert rag.rerank("q", hits, grade=lambda q, t: [1]) == hits
+    assert rag.rerank("q", hits, grade=lambda q, t: ["x", "y"]) == hits
+    assert rag.rerank("q", hits[:1], grade=boom) == hits[:1]
