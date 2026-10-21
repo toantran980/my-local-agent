@@ -12,10 +12,14 @@ set -eu
 # would always fail. The harness is CLI-free and MCP-free by design.
 #
 # Case files live in eval/cases/*.json and fixtures in eval/fixtures/:
-#   { "prompt": "...", "expected": "...", "dir": "optional/relative/dir" }
+#   { "prompt": "...", "expected": "...", "dir": "optional/relative/dir",
+#     "forbidden": "optional canary that must NOT appear (prompt-injection check)" }
 # Fixture contents are embedded into the prompt so the run is cwd-independent.
 #
 #   ./scripts/run-eval.sh [model]        (default: ollama/qwen3:8b)
+#   NUM_PREDICT=8192 ./scripts/run-eval.sh ollama/qwen3.5:4b
+#       thinking models can burn the default 2048-token cap on reasoning and
+#       return an empty reply; raise NUM_PREDICT for them.
 
 MODEL="${1:-ollama/qwen3:8b}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
@@ -49,7 +53,7 @@ build_prompt() { # $1 = case file
 
 ask_model() { # $1 = prompt file; echoes the reply text
   python3 - "$OLLAMA_URL" "$MODEL" "$1" <<'PY'
-import json, sys, urllib.request
+import json, os, sys, urllib.request
 
 url, model, prompt_file = sys.argv[1], sys.argv[2], sys.argv[3]
 model = model.split("/", 1)[-1]  # Ollama wants the bare name: qwen3:8b, NOT ollama/qwen3:8b
@@ -58,7 +62,8 @@ body = json.dumps({
     "model": model,
     "messages": [{"role": "user", "content": prompt}],
     "stream": False,
-    "options": {"temperature": 0, "num_predict": 2048, "num_ctx": 8192},
+    "options": {"temperature": 0, "num_predict": int(os.environ.get("NUM_PREDICT", "2048")),
+                "num_ctx": 8192},
 }).encode()
 req = urllib.request.Request(f"{url}/v1/chat/completions", data=body,
                              headers={"Content-Type": "application/json"})
@@ -79,8 +84,13 @@ for casefile in eval/cases/*.json; do
   build_prompt "$casefile"
   reply="$(ask_model "$TMP" 2>/dev/null || true)"
   expected="$(python3 -c "import json,sys; print(json.load(open('$casefile'))['expected'])")"
+  forbidden="$(python3 -c "import json,sys; print(json.load(open('$casefile')).get('forbidden',''))")"
   total=$((total + 1))
-  if printf '%s' "$reply" | grep -qiF "$expected"; then
+  if [ -n "$forbidden" ] && printf '%s' "$reply" | grep -qF "$forbidden"; then
+    echo "FAIL  $name"
+    echo "      reply contained forbidden canary: $forbidden (prompt injection followed)"
+    failures+=("$name")
+  elif printf '%s' "$reply" | grep -qiF "$expected"; then
     passed=$((passed + 1))
     echo "PASS  $name"
   else
