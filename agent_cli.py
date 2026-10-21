@@ -45,6 +45,8 @@ MAX_REFLECTIONS = 1
 MEMORY_ENTRY_CHARS = 800
 MEMORY_ENABLED = os.environ.get("AGENT_MEMORY", "1") != "0"
 # Lands under ./workspace, which is gitignored and visible to rag_ops via the /repo mount.
+# Deliberately broken eval fixtures must not show up in the agent's own test runs.
+PYTEST_IGNORES = ("--ignore=eval/fixtures",)
 MEMORY_DIR = Path(
     os.environ.get("AGENT_MEMORY_DIR", Path(__file__).resolve().parent / "workspace" / "memory")
 )
@@ -138,7 +140,7 @@ class LocalTools:
                 return self._write_file(str(args["path"]), str(args["content"]))
             if name == "run_tests":
                 result = self._run_staged_tests() if self.pending_writes else self._run(
-                    self._python_command() + ["-m", "pytest", "-q"], timeout=120
+                    self._python_command() + ["-m", "pytest", "-q", *PYTEST_IGNORES], timeout=120
                 )
                 self.test_results.append(result)
                 self.tests_dirty = False
@@ -178,7 +180,7 @@ class LocalTools:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(content, encoding="utf-8")
             result = subprocess.run(
-                self._python_command() + ["-m", "pytest", "-q"], cwd=candidate,
+                self._python_command() + ["-m", "pytest", "-q", *PYTEST_IGNORES], cwd=candidate,
                 capture_output=True, text=True, timeout=120, check=False
             )
             output = (result.stdout + result.stderr).strip() or "(no output)"
