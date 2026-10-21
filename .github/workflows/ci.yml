@@ -75,15 +75,21 @@ jobs:
       - name: Start full stack with docker-compose (CPU mode)
         run: |
           docker compose -f docker-compose.ci.yml up -d --build
-          # Wait for all services to be ready
+          # Wait for all services to be ready; fail with logs if they never are
+          ready=0
           for i in {1..60}; do
             if curl -sf http://localhost:11434/api/tags >/dev/null && \
                curl -sf http://localhost:8000/local_ops/openapi.json >/dev/null; then
               echo "All services ready"
+              ready=1
               break
             fi
             sleep 5
           done
+          if [ "$ready" != 1 ]; then
+            docker compose -f docker-compose.ci.yml logs --tail 60 mcpo ollama
+            exit 1
+          fi
 
       - name: Pull model (CPU, small for CI)
         run: |
