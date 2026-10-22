@@ -47,7 +47,7 @@ def routed_model(
     return hard_model if prompt_complexity(prompt) >= MIN_ROUTING_SIGNALS else easy_model
 
 
-def _installed_models(url: str) -> set[str]:
+def installed_models(url: str) -> set[str]:
     request = urllib.request.Request(url.rstrip("/") + "/api/tags")
     with urllib.request.urlopen(request, timeout=TIMEOUT_TAGS) as response:  # noqa: S310
         data = json.load(response)
@@ -57,7 +57,7 @@ def _installed_models(url: str) -> set[str]:
 def choose_model(prompt: str, fallback_model: str, url: str) -> tuple[str, str | None]:
     """Route to the requested model, visibly falling back if it is not installed."""
     target = routed_model(prompt)
-    installed = _installed_models(url)
+    installed = installed_models(url)
     if target in installed:
         return target, None
     message = (

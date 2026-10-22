@@ -7,6 +7,7 @@ import json
 import sqlite3
 import sys
 import urllib.error
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -24,11 +25,12 @@ from agent.config import (
 )
 from agent.memory import remember
 from agent.ollama import post, post_stream
+from agent.options import RunOptions
 from agent.output import plain_terminal_text
 from agent.planning import structured_plan
 from agent.prompts import executor_prompt, system_prompt
 from agent.result import RunResult
-from agent.routing import _installed_models, choose_model, prompt_complexity, routed_model
+from agent.routing import choose_model, installed_models, prompt_complexity, routed_model
 from agent.tools import (
     LocalTools,
     is_write_refusal,
@@ -52,31 +54,27 @@ def verification_failure(tools: LocalTools, mode: str, audit_file: Path) -> str 
 class _AgentRun:
     """State and steps of a single tool-calling run."""
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(
         self,
         mode: str,
         prompt: str,
-        repo: Path,
-        model: str,
-        url: str,
-        apply: bool,
+        options: RunOptions,
         history: list[dict[str, str]],
-        stream: bool,
         seed_writes: dict[Path, str] | None,
     ) -> None:
         self.mode = mode
         self.prompt = prompt
-        self.repo = repo
-        self.model = model
-        self.url = url
-        self.apply = apply
+        self.repo = options.repo
+        self.model = options.model
+        self.url = options.url
+        self.apply = options.apply
+        self.stream = options.stream
         self.history = history
-        self.stream = stream
-        self.tools = LocalTools(repo, apply, seed_writes)
+        self.tools = LocalTools(self.repo, self.apply, seed_writes)
         day = dt.datetime.now(dt.UTC).date().isoformat()
-        self.audit_file = repo / ".agent" / "audit" / f"{day}.jsonl"
+        self.audit_file = self.repo / ".agent" / "audit" / f"{day}.jsonl"
         self.messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt(mode, apply)},
+            {"role": "system", "content": system_prompt(mode, self.apply)},
             *history,
             {"role": "user", "content": prompt},
         ]
@@ -293,20 +291,15 @@ class _AgentRun:
         return RunResult(question, self.tools.pending_writes, self.audit_file)
 
 
-def run_agent(  # noqa: PLR0913, PLR0917
+def run_agent(
     mode: str,
     prompt: str,
-    repo: Path,
-    model: str,
-    url: str,
-    apply: bool,
+    options: RunOptions,
     history: list[dict[str, str]] | None = None,
-    stream: bool = False,
     seed_writes: dict[Path, str] | None = None,
-    auto_route: bool = False,
 ) -> RunResult:
-    run = _AgentRun(mode, prompt, repo, model, url, apply, history or [], stream, seed_writes)
-    if auto_route:
+    run = _AgentRun(mode, prompt, options, history or [], seed_writes)
+    if options.auto_route:
         run.route_model()
     return run.run()
 
@@ -314,7 +307,7 @@ def run_agent(  # noqa: PLR0913, PLR0917
 def _resolve_split_models(model: str, url: str) -> tuple[str, str]:
     """Planner and executor models, visibly falling back to `model` when not installed."""
     try:
-        installed = _installed_models(url)
+        installed = installed_models(url)
     except (OSError, ValueError, urllib.error.URLError) as exc:
         print(f"Could not check split models; using {model}: {exc}", file=sys.stderr)
         return model, model
@@ -328,24 +321,15 @@ def _resolve_split_models(model: str, url: str) -> tuple[str, str]:
     return chosen[0], chosen[1]
 
 
-def run_planned(  # noqa: PLR0913, PLR0917
-    prompt: str,
-    repo: Path,
-    model: str,
-    url: str,
-    apply: bool,
-    stream: bool = False,
-    auto_route: bool = False,
-    split_models: bool = False,
-) -> RunResult:
+def run_planned(prompt: str, options: RunOptions, split_models: bool = False) -> RunResult:
     """Plan first (read-only), execute the plan, and replan once if verification fails."""
+    model, url = options.model, options.url
     planner, executor = _resolve_split_models(model, url) if split_models else (model, model)
-    route = auto_route and not split_models
+    route = options.auto_route and not split_models
 
     def step(mode: str, task: str, step_model: str, **extra: Any) -> RunResult:
-        return run_agent(
-            mode, task, repo, step_model, url, apply, stream=stream, auto_route=route, **extra
-        )
+        step_options = replace(options, model=step_model, auto_route=route)
+        return run_agent(mode, task, step_options, **extra)
 
     plan = step("plan", prompt, planner)
     if not plan.streamed:

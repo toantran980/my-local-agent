@@ -24,6 +24,7 @@ from agent.history import estimate_history_tokens, summarize_history
 from agent.loop import run_agent, run_planned
 from agent.memory import consolidate_memory, remember
 from agent.ollama import post, post_stream
+from agent.options import RunOptions
 from agent.output import apply_pending_writes, finish_run
 from agent.planning import PLAN_SCHEMA, structured_plan
 from agent.prompts import system_prompt
@@ -40,6 +41,7 @@ from agent.tools import (
 __all__ = [
     "PLAN_SCHEMA",
     "LocalTools",
+    "RunOptions",
     "RunResult",
     "answer_cache_path",
     "apply_pending_writes",

@@ -101,7 +101,7 @@ class LocalTools:
             return handler(args)
         except (KeyError, TypeError, ValueError) as exc:
             return f"ERROR: invalid tool arguments: {exc}"
-        except BaseException as exc:  # Tool failures should return to the model.
+        except Exception as exc:  # Tool failures should return to the model.
             return f"ERROR: {type(exc).__name__}: {exc}"
 
     def _read_file(self, args: dict[str, Any]) -> str:

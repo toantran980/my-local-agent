@@ -12,6 +12,7 @@ from unittest import mock
 from agent_cli import (
     PLAN_SCHEMA,
     LocalTools,
+    RunOptions,
     RunResult,
     answer_cache_path,
     apply_pending_writes,
@@ -158,12 +159,15 @@ class AgentFeatureTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def _opts(self, model="m", **overrides):
+        return RunOptions(self.repo, model, "http://x", **overrides)
+
     def _agent(self, replies, test_outputs, mode="agent"):
         with (
             mock.patch("agent.loop.post", side_effect=replies) as post,
             mock.patch("agent.tools.LocalTools._run_staged_tests", side_effect=test_outputs),
         ):
-            result = run_agent(mode, "task", self.repo, "m", "http://x", apply=False)
+            result = run_agent(mode, "task", self._opts())
         return result, post
 
     def test_validate_arguments_catches_bad_calls(self):
@@ -202,7 +206,7 @@ class AgentFeatureTests(unittest.TestCase):
         )
 
     def test_choose_model_falls_back_when_route_target_is_unavailable(self):
-        with mock.patch("agent.routing._installed_models", return_value={"qwen3:8b"}):
+        with mock.patch("agent.routing.installed_models", return_value={"qwen3:8b"}):
             selected, warning = choose_model(
                 "Debug the API authentication failure and add regression tests.",
                 "qwen3:8b",
@@ -216,15 +220,7 @@ class AgentFeatureTests(unittest.TestCase):
             mock.patch("agent.loop.choose_model", return_value=("qwen3.5:4b", None)),
             mock.patch("agent.loop.post", return_value=_reply("simple answer")) as post,
         ):
-            run_agent(
-                "ask",
-                "short question",
-                self.repo,
-                "qwen3:8b",
-                "http://x",
-                apply=False,
-                auto_route=True,
-            )
+            run_agent("ask", "short question", self._opts("qwen3:8b", auto_route=True))
         self.assertEqual(post.call_args.args[1]["model"], "qwen3.5:4b")
 
     def test_summarize_history_preserves_recent_messages(self):
@@ -286,7 +282,7 @@ class AgentFeatureTests(unittest.TestCase):
                 "agent.loop.structured_plan", return_value="### Steps\n1. Inspect"
             ) as plan_writer,
         ):
-            result = run_agent("plan", "task", self.repo, "m", "http://x", False)
+            result = run_agent("plan", "task", self._opts())
         self.assertEqual(result.answer, "### Steps\n1. Inspect")
         self.assertEqual(plan_writer.call_args.args[0], "task")
 
@@ -344,7 +340,7 @@ class AgentFeatureTests(unittest.TestCase):
             mock.patch("agent.loop.cached_answer", return_value="cached"),
             mock.patch("agent.loop.post") as post,
         ):
-            result = run_agent("ask", "question", self.repo, "m", "http://x", False)
+            result = run_agent("ask", "question", self._opts())
         self.assertEqual(result.answer, "cached")
         post.assert_not_called()
 
@@ -354,15 +350,15 @@ class AgentFeatureTests(unittest.TestCase):
             RunResult("done", {}, self.repo / "a.jsonl", tests_passed=True),
         ]
         with (
-            mock.patch("agent.loop._installed_models", return_value={"qwen3:14b", "qwen3.5:4b"}),
+            mock.patch("agent.loop.installed_models", return_value={"qwen3:14b", "qwen3.5:4b"}),
             mock.patch("agent.loop.PLANNER_MODEL", "qwen3:14b"),
             mock.patch("agent.loop.EXECUTOR_MODEL", "qwen3.5:4b"),
             mock.patch("agent.loop.run_agent", side_effect=results) as runner,
             contextlib.redirect_stdout(io.StringIO()),
         ):
-            run_planned("task", self.repo, "qwen3:8b", "http://x", False, split_models=True)
-        self.assertEqual(runner.call_args_list[0].args[3], "qwen3:14b")
-        self.assertEqual(runner.call_args_list[1].args[3], "qwen3.5:4b")
+            run_planned("task", self._opts("qwen3:8b"), split_models=True)
+        self.assertEqual(runner.call_args_list[0].args[2].model, "qwen3:14b")
+        self.assertEqual(runner.call_args_list[1].args[2].model, "qwen3.5:4b")
 
     def test_split_models_fall_back_when_models_are_unavailable(self):
         results = [
@@ -370,14 +366,14 @@ class AgentFeatureTests(unittest.TestCase):
             RunResult("done", {}, self.repo / "a.jsonl", tests_passed=True),
         ]
         with (
-            mock.patch("agent.loop._installed_models", return_value=set()),
+            mock.patch("agent.loop.installed_models", return_value=set()),
             mock.patch("agent.loop.run_agent", side_effect=results) as runner,
             contextlib.redirect_stderr(io.StringIO()),
             contextlib.redirect_stdout(io.StringIO()),
         ):
-            run_planned("task", self.repo, "fallback", "http://x", False, split_models=True)
-        self.assertEqual(runner.call_args_list[0].args[3], "fallback")
-        self.assertEqual(runner.call_args_list[1].args[3], "fallback")
+            run_planned("task", self._opts("fallback"), split_models=True)
+        self.assertEqual(runner.call_args_list[0].args[2].model, "fallback")
+        self.assertEqual(runner.call_args_list[1].args[2].model, "fallback")
 
     def test_unsupported_citation_triggers_one_retry(self):
         search = {
@@ -437,7 +433,7 @@ class AgentFeatureTests(unittest.TestCase):
             mock.patch("agent.memory.MEMORY_DIR", new=memory),
             mock.patch("agent.loop.post", return_value=_reply("all good")),
         ):
-            run_agent("ask", "check password=hunter2 please", self.repo, "m", "http://x", False)
+            run_agent("ask", "check password=hunter2 please", self._opts())
         self.assertFalse(memory.exists())
 
     def test_post_stream_assembles_text_and_tool_calls(self):
@@ -519,7 +515,7 @@ class AgentFeatureTests(unittest.TestCase):
             mock.patch("agent.loop.run_agent", side_effect=results) as runner,
             contextlib.redirect_stdout(io.StringIO()),
         ):
-            final = run_planned("fix it", self.repo, "m", "http://x", apply=False)
+            final = run_planned("fix it", self._opts())
         self.assertTrue(final.tests_passed)
         self.assertEqual(runner.call_count, len(results))
         self.assertEqual(runner.call_args_list[-1].kwargs["seed_writes"], staged)
@@ -533,7 +529,7 @@ class AgentFeatureTests(unittest.TestCase):
             mock.patch("agent.loop.run_agent", side_effect=results) as runner,
             contextlib.redirect_stdout(io.StringIO()),
         ):
-            run_planned("fix it", self.repo, "m", "http://x", apply=False)
+            run_planned("fix it", self._opts())
         self.assertEqual(runner.call_count, len(results))
 
 
