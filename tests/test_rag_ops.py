@@ -7,6 +7,9 @@ import pytest
 
 pytest.importorskip("mcp.server.fastmcp")
 
+PYTHON_SYMBOL_CHUNKS = 4
+PYTHON_CHUNK_SIZE = 100
+
 spec = importlib.util.spec_from_file_location(
     "rag_ops", Path(__file__).parent.parent / "mcp" / "rag_ops.py")
 rag = importlib.util.module_from_spec(spec)
@@ -58,6 +61,62 @@ def test_chunk_markdown_splits_long_sections_within_size():
     chunks = rag.chunk_markdown("## Big\n" + "word " * 200, size, 10)
     assert len(chunks) > 1
     assert all(len(c) <= size and c.startswith("Big\n") for c in chunks)
+
+
+def test_chunk_python_splits_top_level_symbols_and_keeps_context():
+    source = '''"""Module docs."""
+import pathlib
+DEFAULT_SIZE = 10
+
+@decorator
+def load_index(path):
+    """Load the index from disk."""
+    return pathlib.Path(path).read_text()
+
+class Index:
+    def search(self, query):
+        return query
+
+async def refresh_index():
+    return None
+'''
+
+    chunks = rag.chunk_python(source, size=500, overlap=40)
+
+    assert len(chunks) == PYTHON_SYMBOL_CHUNKS
+    assert "Python module statements" in chunks[0]
+    assert "DEFAULT_SIZE = 10" in chunks[0]
+    assert "Python function: load_index" in chunks[1]
+    assert "@decorator" in chunks[1]
+    assert "Load the index from disk" in chunks[1]
+    assert "Python class: Index" in chunks[2]
+    assert "def search(self, query)" in chunks[2]
+    assert "Python async function: refresh_index" in chunks[3]
+
+
+def test_chunk_python_splits_large_symbols_and_bounds_chunks():
+    source = "def work():\n" + "    result = 1\n" * 100
+
+    chunks = rag.chunk_python(source, size=PYTHON_CHUNK_SIZE, overlap=10)
+
+    assert len(chunks) > 1
+    assert all(len(chunk) <= PYTHON_CHUNK_SIZE for chunk in chunks)
+    assert "Python function: work" in chunks[0]
+
+
+def test_chunk_python_falls_back_for_incomplete_source():
+    source = "def unfinished(:\n" + "x = 1\n" * 20
+
+    assert rag.chunk_python(source, size=20, overlap=5) == rag.chunk_text(
+        source, size=20, overlap=5
+    )
+
+
+def test_chunk_file_uses_ast_for_python():
+    chunks = rag.chunk_file(Path("sample.py"), "def find_user():\n    return None\n", 100, 10)
+
+    assert len(chunks) == 1
+    assert "Python function: find_user" in chunks[0]
 
 
 def test_keyword_score_ignores_stopwords():

@@ -26,5 +26,8 @@
   { "query": "Does the audit trail get cleaned up on its own?", "expected": "log-rotation.md" },
   { "query": "Where is the vector database stored on disk?", "expected": "embedding-cache.md" },
   { "query": "How do I force everything to be re-indexed?", "expected": "embedding-cache.md" },
-  { "query": "What happens if embedding takes too long?", "expected": "timeouts.md" }
+  { "query": "What happens if embedding takes too long?", "expected": "timeouts.md" },
+  { "query": "Which helper subtracts the model weights, cache, and headroom from GPU memory?", "expected": "code-sample.py" },
+  { "query": "What code masks a bearer credential before audit logging?", "expected": "code-sample.py" },
+  { "query": "Which method uses a larger model for difficult prompts?", "expected": "code-sample.py" }
 ]

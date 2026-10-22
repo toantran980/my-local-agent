@@ -4,15 +4,15 @@ Next steps, best fit first. Check items off as they land.
 
 ## Applied AI (agent and RAG quality)
 
-- [x] **Reranking**: opt-in LLM rerank (`RERANK=1`, `RERANK_MODEL`, `RERANK_CANDIDATES`) with fallback on failure. Harder retrieval eval (28 queries, 18 docs) now separates the modes: vector 75%, hybrid 89%, reranked 93% (LLM grade blended at weight 0.3 with file names shown; weights 0.5 and 0.7 did worse). Reranking stays opt-in; next: try a larger reranker model.
+- [x] **Reranking**: opt-in LLM rerank (`RERANK=1`, `RERANK_MODEL`, `RERANK_CANDIDATES`) with fallback on failure. On the earlier 28-query / 18-doc set: vector 75%, hybrid 89%, reranked 93% (LLM grade blended at weight 0.3 with file names shown; weights 0.5 and 0.7 did worse). Reranking stays opt-in; next: remeasure against the expanded code-aware set.
 - [x] **Tool-use eval (LLM-as-judge)**: `scripts/eval-tool-use.py` locally scores recent audited runs for tool choice, efficiency, and completion; also reports errors and duplicate calls.
 - [x] **Guardrails**: tool arguments are validated against their schema and errors go back to the model; sampling (temperature/seed/max_tokens) is now actually applied on `/v1`.
-- [x] **Query rewriting**: opt-in local rewrite (`QUERY_REWRITE=1`); original search is preserved and rewrite results are merged. Retrieval eval: 25/28 (89%), same as hybrid alone, so it remains off by default.
+- [x] **Query rewriting**: opt-in local rewrite (`QUERY_REWRITE=1`); original search is preserved and rewrite results are merged. On the earlier 28-query set it matched hybrid at 25/28 (89%), so it remains off by default.
 - [ ] **Model routing / self-consistency**: easy prompts to the 4B model, hard ones to `qwen3:14b`,
   or majority vote over several samples.
 - [ ] **Conversation summarization**: compress old turns to stay inside the 16k context.
 - [x] **Citation verification**: cited files must appear in this run's tool results; one retry, then flagged as unverified.
-- [ ] **Code-aware RAG**: chunk `.py` files by function/class with `ast` instead of by markdown heading.
+- [x] **Code-aware RAG**: Python files are split by top-level function/class via `ast`; invalid or incomplete source falls back to windows. Chunker version bump rebuilds existing indexes.
 - [ ] **Native structured outputs**: use Ollama's `format` JSON schema (e.g. for plans and judge scores) so output can't be malformed.
 - [ ] **Memory consolidation**: merge/expire `workspace/memory/` entries and keep only runs with a verified outcome.
 - [ ] **Semantic cache**: reuse an answer when a new prompt is very close to an earlier one (existing embeddings).
@@ -38,6 +38,6 @@ Next steps, best fit first. Check items off as they land.
 
 ## What next
 
-1. `vision_ops` to cover the CNN / computer-vision weeks.
-2. Whisper voice input.
-3. Code-aware RAG to improve search over Python source.
+1. Model routing / self-consistency to trade off response quality and local compute.
+2. `vision_ops` to cover the CNN / computer-vision weeks.
+3. Whisper voice input.

@@ -20,9 +20,11 @@ Env overrides:
   RERANK_CANDIDATES  how many hits to rerank before cutting to k (default 15)
   RERANK_WEIGHT    LLM share of the final score, 0-1 (default 0.3)
 
-Markdown files are split by heading; other files use fixed-size windows.
+Markdown files are split by heading, Python by top-level AST symbols, and other
+files use fixed-size windows.
 """
 
+import ast
 import hashlib
 import json
 import math
@@ -37,7 +39,7 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("rag-ops")
 
 # Bump when chunking changes so existing indexes are re-embedded.
-CHUNKER_VERSION = "2-heading-aware"
+CHUNKER_VERSION = "3-python-ast"
 
 SENSITIVE_NAMES = {".env", ".npmrc", ".pypirc", "id_rsa", "id_ed25519"}
 SENSITIVE_SUFFIXES = (".pem", ".key", ".p12", ".pfx")
@@ -126,7 +128,66 @@ def chunk_markdown(text: str, size: int, overlap: int) -> list[str]:
 def chunk_file(path: Path, text: str, size: int, overlap: int) -> list[str]:
     if path.suffix.lower() == ".md":
         return chunk_markdown(text, size, overlap)
+    if path.suffix.lower() == ".py":
+        return chunk_python(text, size, overlap)
     return chunk_text(text, size, overlap)
+
+
+def chunk_python(text: str, size: int, overlap: int) -> list[str]:
+    """Chunk Python by top-level functions and classes, preserving module statements.
+
+    Invalid or incomplete Python falls back to fixed-size windows so source files
+    that are being edited remain searchable.
+    """
+    if size <= 0:
+        raise ValueError("size must be positive")
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return chunk_text(text, size, overlap)
+
+    lines = text.splitlines()
+    chunks: list[str] = []
+    module_nodes: list[ast.stmt] = []
+
+    def append_labeled(content: str, label: str) -> None:
+        prefix = f"{label}\n"
+        prefix = prefix[:max(0, size - 1)] if len(prefix) >= size else prefix
+        available = max(1, size - len(prefix))
+        chunks.extend(
+            prefix + piece
+            for piece in chunk_text(content, available, min(overlap, available - 1))
+        )
+
+    def flush_module() -> None:
+        if not module_nodes:
+            return
+        first = module_nodes[0].lineno
+        last = module_nodes[-1].end_lineno or module_nodes[-1].lineno
+        content = "\n".join(lines[first - 1:last]).strip()
+        if content:
+            append_labeled(content, f"Python module statements (lines {first}-{last})")
+        module_nodes.clear()
+
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            flush_module()
+            start = min(
+                [node.lineno, *(decorator.lineno for decorator in node.decorator_list)]
+            )
+            end = node.end_lineno or node.lineno
+            content = "\n".join(lines[start - 1:end]).strip()
+            if isinstance(node, ast.ClassDef):
+                label = f"Python class: {node.name} (lines {start}-{end})"
+            elif isinstance(node, ast.AsyncFunctionDef):
+                label = f"Python async function: {node.name} (lines {start}-{end})"
+            else:
+                label = f"Python function: {node.name} (lines {start}-{end})"
+            append_labeled(content, label)
+        else:
+            module_nodes.append(node)
+    flush_module()
+    return chunks
 
 
 STOPWORDS = {
@@ -240,9 +301,8 @@ def merge_search_results(primary: list, secondary: list, k: int) -> list:
     """Union result lists, retaining the strongest score for each file chunk."""
     merged: dict[tuple[str, int], tuple[float, str, int, str]] = {}
     for result in (*primary, *secondary):
-        score, path, idx, text = result
-        key = (path, idx)
-        if key not in merged or score > merged[key][0]:
+        key = (result[1], result[2])
+        if key not in merged or result[0] > merged[key][0]:
             merged[key] = result
     return sorted(merged.values(), key=lambda hit: hit[0], reverse=True)[:k]
 

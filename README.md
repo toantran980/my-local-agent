@@ -110,8 +110,10 @@ More agent behavior:
 | Reflect-and-retry | In agent mode, staged writes are tested automatically; a failure is fed back once for a fix |
 | Memory | Each run appends a redacted summary to `workspace/memory/<date>.md` (indexed by RAG); `AGENT_MEMORY=0` disables, `AGENT_MEMORY_DIR` relocates |
 
-`rag_ops` splits Markdown by heading and scores hits as a blend of embedding
-similarity and keyword overlap (`HYBRID_WEIGHT`, default 0.3; `0` = vector only).
+`rag_ops` splits Markdown by heading, Python into top-level functions/classes,
+and other files into fixed windows. Chunker changes trigger a re-index.
+Retrieval scores blend embedding similarity and keyword overlap (`HYBRID_WEIGHT`,
+default 0.3; `0` = vector only).
 For vague queries, set `QUERY_REWRITE` to `"1"` in the `rag_ops` environment in
 `mcpo/config.json` and restart `mcpo`. The local chat model then rewrites the
 query and merges those results with the original query's results. The original
@@ -171,7 +173,7 @@ reliability and latency trend over time. Run the suite once per model, then the
 summary's comparison table shows pass rate and average seconds per run for each.
 
 Retrieval quality has its own check. [`scripts/eval-rag.py`](scripts/eval-rag.py)
-indexes `eval/rag/docs/` and measures hit@1 for the 28 queries in
+indexes `eval/rag/docs/` and measures hit@1 for the 31 queries in
 `eval/rag/cases.json`, reporting vector-only and hybrid side by side and exiting
 non-zero when the hybrid rate is below `THRESHOLD` (default 0.8):
 
