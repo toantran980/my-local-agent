@@ -83,6 +83,7 @@ python3 agent_cli.py plan "Add health checks"               # plan, no writes
 python3 agent_cli.py agent "Fix the syntax error"           # dry-run patch
 python3 agent_cli.py agent --apply "Fix the syntax error"   # writes under --repo
 python3 agent_cli.py ask --auto-route "Explain this module" # route by task complexity
+python3 agent_cli.py agent --plan-first --split-models "Implement a feature"
 python3 agent_cli.py agent                                 # interactive
 ```
 
@@ -93,6 +94,8 @@ python3 agent_cli.py agent                                 # interactive
 | `--url` | `$OLLAMA_URL` or `http://localhost:11434` | |
 | `--apply` | off | Permits writes in agent mode; requires confirmation |
 | `--auto-route` | off | Route easy prompts to a small model and complex prompts to a larger one |
+| `--plan-first` | off | Plan, execute, and replan once if tests fail |
+| `--split-models` | off | With `--plan-first`, use separate configured planner and executor models |
 
 Safety rails, all enforced in code: max 10 tool steps per run, 32KB read cap,
 sensitive paths (`.env`, keys, certs) blocked, credentials redacted before audit.
@@ -110,9 +113,12 @@ More agent behavior:
 | Streaming | `--stream` prints tokens as they arrive (reasoning shows as `(thinking...)`) |
 | Model routing | `--auto-route` (or `/route on` interactively) uses `qwen3.5:4b` for easy prompts and `qwen3:14b` for prompts with multiple complexity signals. Missing target models visibly fall back to `--model`; pull the 14B model with `ollama pull qwen3:14b` to enable the hard route. |
 | Conversation context | Interactive history is summarized when it exceeds an estimated 5,000 tokens; the latest two turns are kept verbatim. `AGENT_HISTORY_TOKEN_BUDGET` tunes the approximate threshold. A failed summary is reported and the original history is kept. |
-| Planner/executor | `agent --plan-first "task"` plans, executes, and replans once if tests fail |
+| Planner/executor | `agent --plan-first "task"` plans, executes, and replans once if tests fail. Add `--split-models` to use `AGENT_PLANNER_MODEL` and `AGENT_EXECUTOR_MODEL`; missing models visibly fall back to `--model`. |
 | Reflect-and-retry | In agent mode, staged writes are tested automatically; a failure is fed back once for a fix |
-| Memory | Each run appends a redacted summary to `workspace/memory/<date>.md` (indexed by RAG); `AGENT_MEMORY=0` disables, `AGENT_MEMORY_DIR` relocates |
+| Structured plans | Plan mode uses Ollama's native JSON-schema output and validates the required fields before formatting the plan. |
+| Verified memory | Only Agent runs with passing verification are stored, redacted, and consolidated; unverified entries are removed, entries older than 30 days expire, and retention is capped. `AGENT_MEMORY=0` disables memory; `AGENT_MEMORY_DIR` relocates it. |
+| Semantic answer cache | Opt-in with `AGENT_SEMANTIC_CACHE=1`. Tool-free Ask answers are embedded locally, redacted, and cached in `workspace/.agent/answer-cache.sqlite3` for 24 hours (100-entry cap, 0.96 cosine threshold). |
+| Nightly anomaly checks | The nightly job records duration and per-model VRAM in gitignored `reports/telemetry.jsonl`; robust high-outlier alerts start after five historical samples. |
 
 `rag_ops` splits Markdown by heading, Python into top-level functions/classes,
 and other files into fixed windows. Chunker changes trigger a re-index.
@@ -211,7 +217,10 @@ Copy `.env.example` to `.env`. All values have defaults.
 | `OLLAMA_URL` | `http://localhost:11434` | Inference endpoint |
 | `AGENT_MODEL` | `qwen3:8b` | Model for `agent_cli.py` |
 | `AGENT_EASY_MODEL` / `AGENT_HARD_MODEL` | `qwen3.5:4b` / `qwen3:14b` | Targets for opt-in `--auto-route` |
+| `AGENT_PLANNER_MODEL` / `AGENT_EXECUTOR_MODEL` | `qwen3:14b` / `qwen3.5:4b` | Targets for `agent --plan-first --split-models`; unavailable models fall back to `--model` |
 | `AGENT_HISTORY_TOKEN_BUDGET` | `5000` | Approximate history size that triggers interactive summarization |
+| `AGENT_SEMANTIC_CACHE` | `0` | Set to `1` to enable the local tool-free Ask answer cache |
+| `AGENT_CACHE_EMBED_MODEL` | `nomic-embed-text` | Ollama embedding model used by the semantic cache |
 | `NIGHTLY_MODEL` | `qwen3:8b` | Model for nightly triage |
 | `CRON_HOUR` / `CRON_MIN` | `17` / `0` | Nightly schedule |
 | `DRAFT_PR` / `GH_REPO` | `0` / — | Draft PR automation |

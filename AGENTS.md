@@ -59,6 +59,10 @@ auth proxy. `AGENT_MEMORY=0` disables run memory (`AGENT_MEMORY_DIR` relocates i
 retrieval (0 = vector only), and `QUERY_REWRITE=1` optionally rewrites search queries.
 `agent_cli.py --auto-route` opts into easy/hard local model routing; interactive
 history is summarized above `AGENT_HISTORY_TOKEN_BUDGET` (default 5000 estimated tokens).
+`AGENT_SEMANTIC_CACHE=1` opts into the local tool-free Ask cache.
+`python3 agent_cli.py agent --plan-first --split-models` uses `AGENT_PLANNER_MODEL` and
+`AGENT_EXECUTOR_MODEL`; unavailable models visibly fall back to `--model`.
+Nightly telemetry and anomaly notes are written under gitignored `reports/`.
 Full table in [README.md](README.md#configuration).
 
 ## Constraints
@@ -74,8 +78,9 @@ Do not violate these — they are enforced in code:
 - `projects_ops` is read-only; `/projects`, `/configs`, `/logs` mount `:ro`.
 - `rag_ops` never writes to sources; it only writes its index to `/workspace/.rag`
   and skips sensitive files.
-- Agent memory (`workspace/memory/`) is redacted like the audit log; keep it inside
-  `workspace/`, the only writable sandbox.
+- Agent memory (`workspace/memory/`) is redacted and stores only test-verified Agent
+  runs; keep it inside `workspace/`, the only writable sandbox. The semantic answer
+  cache is also local and redacted, under `workspace/.agent/`.
 - `mcpo/Dockerfile` pins `fastapi<0.142`; newer FastAPI breaks mcpo 0.0.20 at startup.
 
 ## VRAM (16GB card)

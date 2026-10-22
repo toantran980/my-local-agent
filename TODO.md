@@ -12,11 +12,11 @@ Next steps, best fit first. Check items off as they land.
 - [x] **Conversation summarization**: interactive history is summarized above an estimated 5k-token budget, retaining the latest two turns. Failed summaries keep the original history and report the error.
 - [x] **Citation verification**: cited files must appear in this run's tool results; one retry, then flagged as unverified.
 - [x] **Code-aware RAG**: Python files are split by top-level function/class via `ast`; invalid or incomplete source falls back to windows. Chunker version bump rebuilds existing indexes.
-- [ ] **Native structured outputs**: use Ollama's `format` JSON schema (e.g. for plans and judge scores) so output can't be malformed.
-- [ ] **Memory consolidation**: merge/expire `workspace/memory/` entries and keep only runs with a verified outcome.
-- [ ] **Semantic cache**: reuse an answer when a new prompt is very close to an earlier one (existing embeddings).
-- [ ] **Planner/executor split**: `qwen3:14b` writes the plan, `qwen3.5:4b` runs the steps.
-- [ ] **Nightly anomaly detection**: statistical checks on GPU, VRAM and latency trends.
+- [x] **Native structured outputs**: plan mode uses Ollama's JSON-schema `format`, validates every required field, and formats the validated plan; the eval judge already uses schema-constrained scores.
+- [x] **Memory consolidation**: persist only redacted Agent outcomes with passing verification; remove unverified entries, expire entries older than 30 days, and cap retained entries.
+- [x] **Semantic cache**: opt-in (`AGENT_SEMANTIC_CACHE=1`) local SQLite cache for redacted, tool-free Ask answers, using Ollama embeddings, a 0.96 cosine threshold, 24-hour expiry, and a 100-entry cap.
+- [x] **Planner/executor split**: `agent --plan-first --split-models` uses `AGENT_PLANNER_MODEL` (`qwen3:14b`) and `AGENT_EXECUTOR_MODEL` (`qwen3.5:4b`); missing models visibly fall back to `--model`. The 14B path is covered by mocks because that model is not installed here.
+- [x] **Nightly anomaly detection**: append duration and parsed per-model VRAM to gitignored `reports/telemetry.jsonl`; report robust median/MAD upper outliers after a five-sample baseline.
 
 ## Topic coverage
 

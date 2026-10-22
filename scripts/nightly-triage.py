@@ -24,8 +24,11 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
+import statistics
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -39,6 +42,8 @@ HTTP_BAD_REQUEST = 400
 GPU_THRESHOLD = 0.9
 MAX_REPORT_SIZE = 6000
 MAX_GIT_LOG = 8
+TELEMETRY_FILE = ROOT / "reports" / "telemetry.jsonl"
+ANOMALY_MIN_SAMPLES = 5
 
 TOOLS = [
     {
@@ -275,7 +280,102 @@ def refresh_rag_index():
         print(f"rag index skipped: {e}", file=sys.stderr)
 
 
-def main():
+def detect_telemetry_anomalies(
+    current: dict, history: list[dict], minimum_samples: int = ANOMALY_MIN_SAMPLES
+) -> list[str]:
+    """Report unusually high duration or per-model VRAM using a robust median/MAD baseline."""
+    alerts: list[str] = []
+    metric_history: dict[str, list[float]] = {"duration_seconds": []}
+    for sample in history:
+        if isinstance(sample.get("duration_seconds"), int | float):
+            metric_history["duration_seconds"].append(float(sample["duration_seconds"]))
+        for model in sample.get("models", []):
+            name = model.get("name")
+            value = model.get("vram_gb")
+            if isinstance(name, str) and isinstance(value, int | float):
+                metric_history.setdefault(f"vram:{name}", []).append(float(value))
+
+    observed: dict[str, tuple[float, str]] = {}
+    duration = current.get("duration_seconds")
+    if isinstance(duration, int | float):
+        observed["duration_seconds"] = (float(duration), "seconds")
+    for model in current.get("models", []):
+        if isinstance(model.get("name"), str) and isinstance(model.get("vram_gb"), int | float):
+            key = f"vram:{model['name']}"
+            observed[key] = (float(model["vram_gb"]), "GB VRAM")
+
+    for key, (value, unit) in observed.items():
+        baseline = metric_history.get(key, [])
+        if len(baseline) < minimum_samples:
+            continue
+        median = statistics.median(baseline)
+        mad = statistics.median(abs(item - median) for item in baseline)
+        threshold = median + max(3 * 1.4826 * mad, abs(median) * 0.5, 0.5)
+        if value > threshold:
+            label = key.removeprefix("vram:")
+            alerts.append(
+                f"{label} is unusually high: {value:.2f} {unit} "
+                f"(baseline median {median:.2f}; alert threshold {threshold:.2f})."
+            )
+    return alerts
+
+
+def _read_telemetry(path: Path) -> list[dict]:
+    if not path.is_file():
+        return []
+    samples = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        try:
+            sample = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid telemetry JSON at {path}:{line_number}: {exc}") from exc
+        if isinstance(sample, dict):
+            samples.append(sample)
+    return samples
+
+
+def record_telemetry(
+    duration_seconds: float, gpu_status: str, day: str | None = None,
+    telemetry_path: Path = TELEMETRY_FILE, report_root: Path = ROOT / "reports",
+) -> list[str]:
+    """Append local nightly metrics and add any statistically supported alerts to the report."""
+    models = []
+    pattern = re.compile(
+        r"^(?P<name>\S+)\s+(?P<total>\d+(?:\.\d+)?)GB total\s+/\s+"
+        r"(?P<vram>\d+(?:\.\d+)?)GB VRAM",
+        re.MULTILINE,
+    )
+    for match in pattern.finditer(gpu_status):
+        models.append({
+            "name": match.group("name"),
+            "total_gb": float(match.group("total")),
+            "vram_gb": float(match.group("vram")),
+        })
+    current = {
+        "date": day or dt.datetime.now(dt.UTC).date().isoformat(),
+        "duration_seconds": round(max(0.0, duration_seconds), 3),
+        "models": models,
+    }
+    history = _read_telemetry(telemetry_path)
+    alerts = detect_telemetry_anomalies(current, history)
+    telemetry_path.parent.mkdir(parents=True, exist_ok=True)
+    with telemetry_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(current) + "\n")
+    if len(history) < ANOMALY_MIN_SAMPLES:
+        note = (f"Baseline is still collecting ({len(history) + 1}/"
+                f"{ANOMALY_MIN_SAMPLES} samples).")
+    elif alerts:
+        note = "\n".join(f"- {alert}" for alert in alerts)
+    else:
+        note = "No duration or GPU VRAM anomalies detected."
+    report_path = report_root / f"{current['date']}.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    with report_path.open("a", encoding="utf-8") as handle:
+        handle.write(f"\n\n### Telemetry anomaly check\n{note}\n")
+    return alerts
+
+
+def main():  # noqa: PLR0912
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-iters", type=int, default=8)
     ap.add_argument("--day", default=None)
@@ -302,6 +402,8 @@ def main():
                 {"role": "user", "content": "Run tonight's triage now."}]
 
     report_written = False
+    started = time.monotonic()
+    gpu_status = ""
     for _ in range(args.max_iters):
         resp = complete(messages)
         msg = resp["choices"][0]["message"]
@@ -316,6 +418,8 @@ def main():
                 except json.JSONDecodeError:
                     tool_args = {}
                 result = run_tool(name, tool_args)
+                if name == "gpu_status":
+                    gpu_status = result
                 if name == "write_report":
                     report_written = True
                 messages.append({"role": "tool", "tool_call_id": c.get("id", ""),
@@ -332,8 +436,17 @@ def main():
                 f = ROOT / "reports" / f"{today}.md"
                 if f.exists():
                     print(f"report -> {f.relative_to(ROOT)}")
+            try:
+                alerts = record_telemetry(time.monotonic() - started, gpu_status)
+                print(f"telemetry: recorded; {len(alerts)} anomaly alert(s)")
+            except (OSError, ValueError) as exc:
+                print(f"telemetry recording failed: {exc}", file=sys.stderr)
             return 0
     print(f"no final answer in loop budget; report_written={report_written}")
+    try:
+        record_telemetry(time.monotonic() - started, gpu_status)
+    except (OSError, ValueError) as exc:
+        print(f"telemetry recording failed: {exc}", file=sys.stderr)
     return 0 if report_written else 2
 
 

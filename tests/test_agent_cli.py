@@ -1,6 +1,8 @@
 import contextlib
+import datetime as dt
 import io
 import json
+import sqlite3
 import tempfile
 import unittest
 import urllib.error
@@ -8,19 +10,26 @@ from pathlib import Path
 from unittest import mock
 
 from agent_cli import (
+    PLAN_SCHEMA,
     LocalTools,
     RunResult,
+    answer_cache_path,
     apply_pending_writes,
+    cached_answer,
     choose_model,
+    consolidate_memory,
     estimate_history_tokens,
     finish_run,
     is_sensitive_path,
     post,
     post_stream,
+    remember,
     resolve_repo_path,
     routed_model,
     run_agent,
     run_planned,
+    store_cached_answer,
+    structured_plan,
     summarize_history,
     system_prompt,
     tool_definitions,
@@ -226,6 +235,114 @@ class AgentFeatureTests(unittest.TestCase):
             self.assertIs(summarize_history(history, "qwen3:8b", "http://x"), history)
         opened.assert_not_called()
 
+    def test_structured_plan_uses_native_schema_and_formats_sections(self):
+        output = json.dumps({
+            "summary": "Add bounded cache.",
+            "files": ["agent_cli.py"],
+            "steps": ["Add storage", "Verify expiry"],
+            "tests": ["Run focused tests"],
+            "risks": ["Old answers may become stale"],
+        })
+        body = json.dumps({"message": {"content": output}})
+        captured = {}
+
+        def open_request(request, timeout):
+            captured["request"] = json.loads(request.data)
+            return io.BytesIO(body.encode())
+
+        with mock.patch("agent_cli.urllib.request.urlopen", side_effect=open_request):
+            plan = structured_plan("Add a cache", [], "qwen3:8b", "http://x")
+        self.assertEqual(captured["request"]["format"], PLAN_SCHEMA)
+        self.assertIn("### Affected files", plan)
+        self.assertIn("1. Add storage", plan)
+        self.assertIn("- Old answers may become stale", plan)
+
+    def test_run_agent_plan_uses_structured_output(self):
+        with mock.patch("agent_cli.post", return_value=_reply("draft")), mock.patch(
+            "agent_cli.structured_plan", return_value="### Steps\n1. Inspect"
+        ) as plan_writer:
+            result = run_agent("plan", "task", self.repo, "m", "http://x", False)
+        self.assertEqual(result.answer, "### Steps\n1. Inspect")
+        self.assertEqual(plan_writer.call_args.args[0], "task")
+
+    def test_memory_only_stores_verified_agent_runs_and_consolidates(self):
+        memory = self.repo / "memory"
+        old = memory / "2020-01-01.md"
+        old.parent.mkdir()
+        old.write_text("## old\nTask: unverified\n", encoding="utf-8")
+        today = memory / f"{dt.datetime.now(dt.UTC).date().isoformat()}.md"
+        today.write_text(
+            "## old\nTask: unverified\n\n"
+            "## 12:00:00Z agent (model)\nTask: verified\nOutcome: passed\n"
+            "Verified: tests passed\n",
+            encoding="utf-8",
+        )
+        with mock.patch("agent_cli.MEMORY_ENABLED", new=True), mock.patch(
+            "agent_cli.MEMORY_DIR", new=memory
+        ):
+            consolidate_memory()
+            remember("agent", "m", "question", "answer", verified=True)
+        self.assertFalse(old.exists())
+        text = today.read_text(encoding="utf-8")
+        self.assertNotIn("unverified", text)
+        self.assertEqual(text.count("Verified: tests passed"), 2)
+
+    def test_memory_does_not_store_unverified_or_non_agent_runs(self):
+        memory = self.repo / "memory"
+        with mock.patch("agent_cli.MEMORY_ENABLED", new=True), mock.patch(
+            "agent_cli.MEMORY_DIR", new=memory
+        ):
+            remember("ask", "m", "question", "answer", verified=True)
+            remember("agent", "m", "question", "answer", verified=False)
+        self.assertFalse(memory.exists())
+
+    def test_semantic_cache_stores_redacted_answer_and_retrieves_similar(self):
+        with mock.patch("agent_cli.answer_embedding", return_value=[1.0, 0.0]):
+            store_cached_answer(self.repo, "token=secret", "Answer", "http://x")
+            answer = cached_answer(self.repo, "similar question", "http://x")
+        self.assertEqual(answer, "Answer")
+        with contextlib.closing(sqlite3.connect(answer_cache_path(self.repo))) as connection:
+            prompt = connection.execute("SELECT prompt FROM answers").fetchone()[0]
+        self.assertNotIn("secret", prompt)
+
+    def test_semantic_cache_rejects_low_similarity(self):
+        with mock.patch("agent_cli.answer_embedding", side_effect=([1.0, 0.0], [0.0, 1.0])):
+            store_cached_answer(self.repo, "first", "Answer", "http://x")
+            answer = cached_answer(self.repo, "different", "http://x")
+        self.assertIsNone(answer)
+
+    def test_semantic_cache_hit_skips_model_for_ask_mode(self):
+        with mock.patch("agent_cli.ANSWER_CACHE_ENABLED", new=True), mock.patch(
+            "agent_cli.cached_answer", return_value="cached"
+        ), mock.patch("agent_cli.post") as post:
+            result = run_agent("ask", "question", self.repo, "m", "http://x", False)
+        self.assertEqual(result.answer, "cached")
+        post.assert_not_called()
+
+    def test_planned_run_can_split_models(self):
+        results = [RunResult("plan", {}, self.repo / "a.jsonl"),
+                   RunResult("done", {}, self.repo / "a.jsonl", tests_passed=True)]
+        with mock.patch("agent_cli._installed_models",
+                        return_value={"qwen3:14b", "qwen3.5:4b"}), \
+                mock.patch("agent_cli.PLANNER_MODEL", "qwen3:14b"), \
+                mock.patch("agent_cli.EXECUTOR_MODEL", "qwen3.5:4b"), \
+                mock.patch("agent_cli.run_agent", side_effect=results) as runner, \
+                contextlib.redirect_stdout(io.StringIO()):
+            run_planned("task", self.repo, "qwen3:8b", "http://x", False, split_models=True)
+        self.assertEqual(runner.call_args_list[0].args[3], "qwen3:14b")
+        self.assertEqual(runner.call_args_list[1].args[3], "qwen3.5:4b")
+
+    def test_split_models_fall_back_when_models_are_unavailable(self):
+        results = [RunResult("plan", {}, self.repo / "a.jsonl"),
+                   RunResult("done", {}, self.repo / "a.jsonl", tests_passed=True)]
+        with mock.patch("agent_cli._installed_models", return_value=set()), \
+                mock.patch("agent_cli.run_agent", side_effect=results) as runner, \
+                contextlib.redirect_stderr(io.StringIO()), \
+                contextlib.redirect_stdout(io.StringIO()):
+            run_planned("task", self.repo, "fallback", "http://x", False, split_models=True)
+        self.assertEqual(runner.call_args_list[0].args[3], "fallback")
+        self.assertEqual(runner.call_args_list[1].args[3], "fallback")
+
     def test_unsupported_citation_triggers_one_retry(self):
         search = {"id": "1", "function": {"name": "semantic_search",
                                           "arguments": json.dumps({"query": "vram"})}}
@@ -271,16 +388,13 @@ class AgentFeatureTests(unittest.TestCase):
         result, _ = self._agent([_reply("just an answer")], [], mode="ask")
         self.assertIsNone(result.tests_passed)
 
-    def test_memory_entry_is_written_and_redacted(self):
+    def test_unverified_ask_run_is_not_written_to_memory(self):
         memory = self.repo / "memory"
         with mock.patch("agent_cli.MEMORY_ENABLED", new=True), mock.patch(
             "agent_cli.MEMORY_DIR", new=memory
         ), mock.patch("agent_cli.post", return_value=_reply("all good")):
             run_agent("ask", "check password=hunter2 please", self.repo, "m", "http://x", False)
-        text = next(memory.glob("*.md")).read_text(encoding="utf-8")
-        self.assertIn("Task:", text)
-        self.assertIn("all good", text)
-        self.assertNotIn("hunter2", text)
+        self.assertFalse(memory.exists())
 
     def test_post_stream_assembles_text_and_tool_calls(self):
         lines = [
