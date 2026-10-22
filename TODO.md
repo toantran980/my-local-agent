@@ -6,7 +6,7 @@ Next steps, best fit first. Check items off as they land.
 
 - [x] **Reranking**: opt-in LLM rerank (`RERANK=1`, `RERANK_MODEL`, `RERANK_CANDIDATES`) with fallback on failure. Harder retrieval eval (28 queries, 18 docs) now separates the modes: vector 75%, hybrid 89%, reranked 93% (LLM grade blended at weight 0.3 with file names shown; weights 0.5 and 0.7 did worse). Reranking stays opt-in; next: try a larger reranker model.
 - [x] **Tool-use eval (LLM-as-judge)**: `scripts/eval-tool-use.py` locally scores recent audited runs for tool choice, efficiency, and completion; also reports errors and duplicate calls.
-- [X] **Guardrails**: tool arguments are validated against their schema and errors go back to the model; sampling (temperature/seed/max_tokens) is now actually applied on `/v1`.
+- [x] **Guardrails**: tool arguments are validated against their schema and errors go back to the model; sampling (temperature/seed/max_tokens) is now actually applied on `/v1`.
 - [ ] **Query rewriting / HyDE**: rewrite the question or generate a hypothetical answer before embedding.
 - [ ] **Model routing / self-consistency**: easy prompts to the 4B model, hard ones to `qwen3:14b`,
   or majority vote over several samples.
@@ -38,6 +38,6 @@ Next steps, best fit first. Check items off as they land.
 
 ## What next
 
-1. Reranking, then the tool-use eval so every later change can be measured.
+1. Query rewriting / HyDE to improve retrieval for vague questions.
 2. `vision_ops` to cover the CNN / computer-vision weeks.
 3. Whisper voice input.
