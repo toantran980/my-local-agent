@@ -95,8 +95,7 @@ TOOLS = [
         "function": {
             "name": "gpu_status",
             "description": (
-                "Which models are loaded on the GPU and their VRAM "
-                "residency (READ-ONLY)."
+                "Which models are loaded on the GPU and their VRAM residency (READ-ONLY)."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -159,11 +158,17 @@ def run_tool(name, args):  # noqa: PLR0911
         if name == "git_status":
             st = subprocess.run(
                 ["git", "-C", str(ROOT), "status", "--short"],
-                capture_output=True, text=True, timeout=30, check=False
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
             ).stdout
             log = subprocess.run(
                 ["git", "-C", str(ROOT), "log", "--oneline", f"-{MAX_GIT_LOG}"],
-                capture_output=True, text=True, timeout=30, check=False
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
             ).stdout
             return f"STATUS:\n{st or '(clean)'}\nLOG:\n{log or '(no commits yet)'}"
         if name == "read_file":
@@ -195,8 +200,13 @@ def run_tool(name, args):  # noqa: PLR0911
             return "\n".join(parts) or "(no models loaded)"
         if name == "models_list":
             d = _get("/api/tags")
-            return "\n".join(f"{m.get('name','?')}  {m.get('size',0)/1e9:.1f}GB"
-                             for m in d.get("models", [])) or "(none)"
+            return (
+                "\n".join(
+                    f"{m.get('name', '?')}  {m.get('size', 0) / 1e9:.1f}GB"
+                    for m in d.get("models", [])
+                )
+                or "(none)"
+            )
         if name == "write_report":
             md = args.get("markdown", "")
             day = dt.datetime.now(dt.UTC).date().isoformat()
@@ -211,9 +221,21 @@ def run_tool(name, args):  # noqa: PLR0911
                 body_file.write_text(md + "\n", encoding="utf-8")
                 subprocess.run(
                     [
-                        "gh", "pr", "create", "--draft", "-R", os.environ["GH_REPO"],
-                        "-t", tag, "-F", str(body_file),
-                    ], capture_output=True, text=True, timeout=30, check=False
+                        "gh",
+                        "pr",
+                        "create",
+                        "--draft",
+                        "-R",
+                        os.environ["GH_REPO"],
+                        "-t",
+                        tag,
+                        "-F",
+                        str(body_file),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
                 )
             return f"wrote {out.relative_to(ROOT)} ({len(md)} chars)"
         return f"unknown tool: {name}"
@@ -271,8 +293,7 @@ def complete(messages):
 def refresh_rag_index():
     """Best-effort re-index so semantic search is fresh; never fails the run."""
     url = os.environ.get("RAG_URL", "http://localhost:8000/rag_ops") + "/index_sources"
-    req = urllib.request.Request(
-        url, data=b"{}", headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(url, data=b"{}", headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=300) as r:
             print(f"rag index: {json.load(r)}")
@@ -335,8 +356,11 @@ def _read_telemetry(path: Path) -> list[dict]:
 
 
 def record_telemetry(
-    duration_seconds: float, gpu_status: str, day: str | None = None,
-    telemetry_path: Path = TELEMETRY_FILE, report_root: Path = ROOT / "reports",
+    duration_seconds: float,
+    gpu_status: str,
+    day: str | None = None,
+    telemetry_path: Path = TELEMETRY_FILE,
+    report_root: Path = ROOT / "reports",
 ) -> list[str]:
     """Append local nightly metrics and add any statistically supported alerts to the report."""
     models = []
@@ -346,11 +370,13 @@ def record_telemetry(
         re.MULTILINE,
     )
     for match in pattern.finditer(gpu_status):
-        models.append({
-            "name": match.group("name"),
-            "total_gb": float(match.group("total")),
-            "vram_gb": float(match.group("vram")),
-        })
+        models.append(
+            {
+                "name": match.group("name"),
+                "total_gb": float(match.group("total")),
+                "vram_gb": float(match.group("vram")),
+            }
+        )
     current = {
         "date": day or dt.datetime.now(dt.UTC).date().isoformat(),
         "duration_seconds": round(max(0.0, duration_seconds), 3),
@@ -362,8 +388,7 @@ def record_telemetry(
     with telemetry_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(current) + "\n")
     if len(history) < ANOMALY_MIN_SAMPLES:
-        note = (f"Baseline is still collecting ({len(history) + 1}/"
-                f"{ANOMALY_MIN_SAMPLES} samples).")
+        note = f"Baseline is still collecting ({len(history) + 1}/{ANOMALY_MIN_SAMPLES} samples)."
     elif alerts:
         note = "\n".join(f"- {alert}" for alert in alerts)
     else:
@@ -398,8 +423,10 @@ def main():  # noqa: PLR0912
         "  5. write_report with the full triage: Today's changes, GPU status, "
         "follow-ups. Call write_report LAST."
     )
-    messages = [{"role": "system", "content": system},
-                {"role": "user", "content": "Run tonight's triage now."}]
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "Run tonight's triage now."},
+    ]
 
     report_written = False
     started = time.monotonic()
@@ -422,8 +449,9 @@ def main():  # noqa: PLR0912
                     gpu_status = result
                 if name == "write_report":
                     report_written = True
-                messages.append({"role": "tool", "tool_call_id": c.get("id", ""),
-                                 "content": result})
+                messages.append(
+                    {"role": "tool", "tool_call_id": c.get("id", ""), "content": result}
+                )
         else:
             # if the model bailed without write_report, still persist a report
             if not report_written:

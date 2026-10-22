@@ -14,7 +14,8 @@ a nightly triage job.
 
 | Path | Contents |
 | --- | --- |
-| `agent_cli.py` | Terminal agent: `ask` / `plan` / `agent` modes |
+| `agent_cli.py` | Terminal agent entry point: `ask` / `plan` / `agent` modes; re-exports the `agent/` package |
+| `agent/` | Stdlib-only implementation: `config`, `ollama` (HTTP), `tools`, `loop`, `planning`, `routing`, `history`, `cache`, `memory`, `audit`, `output`, `prompts`, `cli` |
 | `mcp/local_ops.py` | MCP server: git, GPU, system, eval introspection |
 | `mcp/projects_ops.py` | MCP server: read-only project file access |
 | `mcp/rag_ops.py` | MCP server: local RAG (Ollama embeddings + SQLite index) |
@@ -71,7 +72,7 @@ Do not violate these — they are enforced in code:
 
 - Services bind to `127.0.0.1` only. Ollama's API has no auth.
 - `agent_cli.py` writes only under `--repo`, and only with `--apply`.
-- Max 10 tool steps per run (`MAX_TOOL_STEPS` in `agent_cli.py`).
+- Max 10 tool steps per run (`MAX_TOOL_STEPS` in `agent/config.py`).
 - 32KB read cap (`MAX_FILE_BYTES`); 1MB write cap.
 - Sensitive paths (`.env`, keys, certs) are blocked from read and write.
 - Credentials are redacted before anything is written to the audit log.
@@ -92,8 +93,10 @@ not. Weights + KV + 1GB headroom must stay under ~14.5GB.
 ## Conventions
 
 - `ruff` with `line-length = 100`, `target-version = "py314"`, double quotes.
-- `agent_cli.py` is deliberately dependency-free (stdlib `urllib` only). Do not
-  add third-party imports to it.
+- `agent_cli.py` and the `agent/` package are deliberately dependency-free (stdlib
+  `urllib` only). Do not add third-party imports to them. New logic goes in the
+  matching `agent/` module; keep `agent_cli.py` a thin re-export shim.
+- Tests patch names in the module that *uses* them (e.g. `agent.loop.post`), not the shim.
 - `scripts/nightly-triage.py` is stdlib-only for the same reason.
 - Eval cases are cwd-independent: fixture contents are inlined into the prompt.
 - The eval harness talks to Ollama directly rather than shelling out to

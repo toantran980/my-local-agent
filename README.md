@@ -74,7 +74,8 @@ curl -X POST http://localhost:8000/rag_ops/semantic_search \
 
 ## Agent CLI
 
-[`agent_cli.py`](agent_cli.py) is a dependency-free terminal agent that talks to
+[`agent_cli.py`](agent_cli.py) is a dependency-free terminal agent (implemented in the
+[`agent/`](agent) package) that talks to
 Ollama's OpenAI-compatible API. Three modes, one flag that unlocks writes.
 
 ```bash
