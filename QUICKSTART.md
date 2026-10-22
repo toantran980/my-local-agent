@@ -1,4 +1,6 @@
-# Quickstart
+	
+
+							# Quickstart
 
 The 60-second version of [README.md](README.md). Commands are copy-pasteable and
 match what is actually in this repo.
@@ -113,14 +115,14 @@ python3 scripts/eval-rag.py
 
 ## Troubleshooting
 
-| Symptom                       | Fix                                                                    |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| `docker: command not found` | Start Docker Desktop; it provides the CLI in WSL2                      |
+| Symptom                                                      | Fix                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `docker: command not found`                                | Start Docker Desktop; it provides the CLI in WSL2                                                                                                                                                                                                                                          |
 | `connection refused :11434` or `Ollama is not reachable` | Confirm `http://localhost:11434/api/tags` works inside WSL. If Ollama is Windows-hosted but bound only to `127.0.0.1`, WSL may not be able to reach it; use WSL mirrored networking or configure an `OLLAMA_URL` reachable from WSL without exposing Ollama to an untrusted network. |
-| Eval reports empty replies | Start Ollama and confirm the requested model is listed by `/api/tags` from WSL; the eval script now stops before recording results if the endpoint/model is unavailable. |
-| No GPU row in smoke test      | Model still pulling; re-run step 1                                     |
-| WebUI won't load on :3000     | Cold start is slow; retry after ~1 min                                 |
-| Cron reports not appearing    | `wsl bash -lc 'service cron start'`, then re-run `install-cron.sh` |
+| Eval reports empty replies                                   | Start Ollama and confirm the requested model is listed by `/api/tags` from WSL; the eval script now stops before recording results if the endpoint/model is unavailable.                                                                                                                 |
+| No GPU row in smoke test                                     | Model still pulling; re-run step 1                                                                                                                                                                                                                                                         |
+| WebUI won't load on :3000                                    | Cold start is slow; retry after ~1 min                                                                                                                                                                                                                                                     |
+| Cron reports not appearing                                   | `wsl bash -lc 'service cron start'`, then re-run `install-cron.sh`                                                                                                                                                                                                                     |
 
 Full GPU troubleshooting, optional profiles, and the tool reference live in
 [README.md](README.md). To grant the agent read access to your other project
