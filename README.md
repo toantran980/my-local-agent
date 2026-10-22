@@ -171,6 +171,17 @@ non-zero when the hybrid rate is below `THRESHOLD` (default 0.8):
 python3 scripts/eval-rag.py           # needs nomic-embed-text in Ollama
 ```
 
+The tool-use evaluator sends recent completed `.agent/audit/` runs to a local
+Ollama model for qualitative scores of tool choice, efficiency, and completion.
+It also reports objective tool counts, errors, and duplicate calls. Audit content
+stays local; the judge scores are diagnostic, not a correctness guarantee.
+
+```bash
+python3 scripts/eval-tool-use.py                 # latest audit file, latest 10 runs
+python3 scripts/eval-tool-use.py --limit 3       # score only the latest 3
+python3 scripts/eval-tool-use.py --audit-file .agent/audit/2026-10-21.jsonl
+```
+
 CI (`.github/workflows/ci.yml`) runs `ruff check .`, `shellcheck scripts/*.sh`,
 and `pytest`.
 

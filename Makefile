@@ -5,7 +5,7 @@ SHELL := /bin/bash
 ROOT := $(shell pwd)
 MY_LOCAL_AGENT_ROOT ?= $(ROOT)
 
-.PHONY: up down build restart logs test eval cron cron-install logs-ollama logs-mcpo logs-webui clean
+.PHONY: up down build restart logs test eval eval-tool-use cron cron-install logs-ollama logs-mcpo logs-webui clean
 
 # ── Core stack ──────────────────────────────────────────────────
 up:
@@ -51,6 +51,9 @@ eval-history:
 
 eval-rag:
 	wsl bash -lc 'cd "$${MY_LOCAL_AGENT_ROOT:-$(ROOT)}" && python3 scripts/eval-rag.py'
+
+eval-tool-use:
+	wsl bash -lc 'cd "$${MY_LOCAL_AGENT_ROOT:-$(ROOT)}" && python3 scripts/eval-tool-use.py'
 
 # ── Cron / nightly ──────────────────────────────────────────────
 cron-install:

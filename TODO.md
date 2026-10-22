@@ -5,8 +5,7 @@ Next steps, best fit first. Check items off as they land.
 ## Applied AI (agent and RAG quality)
 
 - [x] **Reranking**: opt-in LLM rerank (`RERANK=1`, `RERANK_MODEL`, `RERANK_CANDIDATES`) with fallback on failure. Harder retrieval eval (28 queries, 18 docs) now separates the modes: vector 75%, hybrid 89%, reranked 93% (LLM grade blended at weight 0.3 with file names shown; weights 0.5 and 0.7 did worse). Reranking stays opt-in; next: try a larger reranker model.
-- [ ] **Tool-use eval (LLM-as-judge)**: replay `.agent/audit/` runs and score tool choice, wasted
-  steps and task completion. Use it to measure reflection and the planner.
+- [x] **Tool-use eval (LLM-as-judge)**: `scripts/eval-tool-use.py` locally scores recent audited runs for tool choice, efficiency, and completion; also reports errors and duplicate calls.
 - [X] **Guardrails**: tool arguments are validated against their schema and errors go back to the model; sampling (temperature/seed/max_tokens) is now actually applied on `/v1`.
 - [ ] **Query rewriting / HyDE**: rewrite the question or generate a hypothetical answer before embedding.
 - [ ] **Model routing / self-consistency**: easy prompts to the 4B model, hard ones to `qwen3:14b`,
@@ -17,7 +16,8 @@ Next steps, best fit first. Check items off as they land.
 - [ ] **Native structured outputs**: use Ollama's `format` JSON schema (e.g. for plans and judge scores) so output can't be malformed.
 - [ ] **Memory consolidation**: merge/expire `workspace/memory/` entries and keep only runs with a verified outcome.
 - [ ] **Semantic cache**: reuse an answer when a new prompt is very close to an earlier one (existing embeddings).
-- [ ] **Planner/executor split**: `qwen3:14b` writes the plan, `qwen3.5:4b` runs the steps.- [ ] **Nightly anomaly detection**: statistical checks on GPU, VRAM and latency trends.
+- [ ] **Planner/executor split**: `qwen3:14b` writes the plan, `qwen3.5:4b` runs the steps.
+- [ ] **Nightly anomaly detection**: statistical checks on GPU, VRAM and latency trends.
 
 ## Topic coverage
 
