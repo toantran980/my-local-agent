@@ -1,6 +1,4 @@
-	
-
-							# Quickstart
+# Quickstart
 
 The 60-second version of [README.md](README.md). Commands are copy-pasteable and
 match what is actually in this repo.
