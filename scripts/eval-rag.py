@@ -8,6 +8,7 @@ with the embedding model pulled. Prints hit@k and exits non-zero below THRESHOLD
   EMBED_MODEL  (default nomic-embed-text)
   TOP_K        (default 1)
   HYBRID_WEIGHT keyword share for the hybrid run (default 0.3)
+  QUERY_REWRITE=1 also evaluates original + rewritten query retrieval
   THRESHOLD    minimum hybrid hit rate 0-1 (default 0.8)
 """
 
@@ -45,6 +46,8 @@ def main() -> int:
         weight = float(os.environ.get("HYBRID_WEIGHT", "0.3"))
         rates = {}
         modes = [("vector", 0.0), ("hybrid", weight)]
+        if os.environ.get("QUERY_REWRITE") == "1":
+            modes.append(("rewrite", weight))
         if os.environ.get("RERANK") == "1":
             modes.append(("reranked", weight))
         for label, w in modes:
@@ -52,12 +55,20 @@ def main() -> int:
             for case, qvec in zip(cases, qvecs, strict=True):
                 pool = max(top_k, 15) if label == "reranked" else top_k
                 ranked = rag.search_index(conn, qvec, pool, query=case["query"], hybrid_weight=w)
+                if label == "rewrite":
+                    rewritten = rag.rewrite_query(case["query"])
+                    if rewritten.casefold() != case["query"].casefold():
+                        rewritten_vec = rag.embed([rewritten])[0]
+                        rewritten_hits = rag.search_index(
+                            conn, rewritten_vec, pool, query=case["query"], hybrid_weight=w
+                        )
+                        ranked = rag.merge_search_results(ranked, rewritten_hits, pool)
                 if label == "reranked":
                     ranked = rag.rerank(case["query"], ranked)[:top_k]
                 found = [Path(path).name for _, path, _, _ in ranked]
                 ok = case["expected"] in found
                 hits += ok
-                if label == "hybrid" or not ok:
+                if label in ("hybrid", "rewrite") or not ok:
                     print(f"{'PASS' if ok else 'FAIL'}  [{label}] {case['query']!r} -> {found}")
             rates[label] = hits / len(cases)
             print(f"hit@{top_k} {label}: {hits}/{len(cases)} = {rates[label]:.0%}")

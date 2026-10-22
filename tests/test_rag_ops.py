@@ -118,3 +118,106 @@ def test_rerank_falls_back_on_errors_and_bad_output():
     assert rag.rerank("q", hits, grade=lambda q, t: [1]) == hits
     assert rag.rerank("q", hits, grade=lambda q, t: ["x", "y"]) == hits
     assert rag.rerank("q", hits[:1], grade=boom) == hits[:1]
+
+
+def test_rewrite_query_uses_local_ollama_and_validates_result(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return json.dumps({"message": {"content": json.dumps(
+                {"query": "GPU memory budget RTX 5080"}
+            )}}).encode()
+
+    captured = {}
+
+    def open_request(request, timeout):
+        captured["url"] = request.full_url
+        captured["payload"] = json.loads(request.data)
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(rag.urllib.request, "urlopen", open_request)
+    rewritten = rag.rewrite_query("How much room is left for a bigger model?")
+
+    assert rewritten == "GPU memory budget RTX 5080"
+    assert captured["url"].endswith("/api/chat")
+    assert captured["payload"]["format"]["required"] == ["query"]
+    assert captured["payload"]["options"]["temperature"] == 0
+
+
+def test_rewrite_query_rejects_invalid_response(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return json.dumps({"message": {"content": '{"query": "  "}'}}).encode()
+
+    monkeypatch.setattr(rag.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+    with pytest.raises(ValueError, match="empty or invalid"):
+        rag.rewrite_query("vague query")
+
+
+def test_merge_search_results_keeps_union_and_best_score():
+    primary = [(0.8, "a.md", 0, "A"), (0.5, "b.md", 1, "B")]
+    secondary = [(0.9, "b.md", 1, "B"), (0.7, "c.md", 0, "C")]
+
+    assert [hit[1] for hit in rag.merge_search_results(primary, secondary, 3)] == [
+        "b.md", "a.md", "c.md"
+    ]
+
+
+def test_semantic_search_rewrite_expands_candidates_and_preserves_original(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAG_DB", str(tmp_path / "index.db"))
+    monkeypatch.setenv("QUERY_REWRITE", "1")
+    monkeypatch.setenv("RERANK", "0")
+    conn = rag._db()
+    conn.execute(
+        "INSERT INTO chunks (path, idx, text, vec) VALUES (?,?,?,?)",
+        ("memory.md", 0, "RTX 5080 has 16 GB of VRAM", json.dumps([1.0, 0.0])),
+    )
+    conn.execute(
+        "INSERT INTO chunks (path, idx, text, vec) VALUES (?,?,?,?)",
+        ("unrelated.md", 0, "A separate topic", json.dumps([0.6, 0.8])),
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(rag, "rewrite_query", lambda _query: "GPU VRAM memory budget")
+    monkeypatch.setattr(
+        rag, "embed",
+        lambda texts: [[1.0, 0.0] if "GPU VRAM" in text else [0.0, 1.0] for text in texts],
+    )
+
+    result = rag.semantic_search("How much room is left?", k=1)
+
+    assert "memory.md" in result
+    assert "16 GB of VRAM" in result
+    assert "unrelated.md" not in result
+
+
+def test_semantic_search_reports_rewrite_fallback(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAG_DB", str(tmp_path / "index.db"))
+    monkeypatch.setenv("QUERY_REWRITE", "1")
+    monkeypatch.setenv("RERANK", "0")
+    conn = rag._db()
+    conn.execute(
+        "INSERT INTO chunks (path, idx, text, vec) VALUES (?,?,?,?)",
+        ("memory.md", 0, "Original query match", json.dumps([1.0, 0.0])),
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(rag, "rewrite_query", lambda _query: (_ for _ in ()).throw(OSError("down")))
+    monkeypatch.setattr(rag, "embed", lambda _texts: [[1.0, 0.0]])
+
+    result = rag.semantic_search("original query", k=1)
+
+    assert "Query rewrite unavailable" in result
+    assert "memory.md" in result

@@ -112,6 +112,14 @@ More agent behavior:
 
 `rag_ops` splits Markdown by heading and scores hits as a blend of embedding
 similarity and keyword overlap (`HYBRID_WEIGHT`, default 0.3; `0` = vector only).
+For vague queries, set `QUERY_REWRITE` to `"1"` in the `rag_ops` environment in
+`mcpo/config.json` and restart `mcpo`. The local chat model then rewrites the
+query and merges those results with the original query's results. The original
+is always searched, and rewrite failures are reported while falling back to
+original-query results. This adds one local model call per search.
+`QUERY_REWRITE_MODEL` selects that model (default `qwen3:8b`). To compare it
+against the baseline on the retrieval suite, run
+`QUERY_REWRITE=1 python3 scripts/eval-rag.py`.
 
 Every run appends structured JSONL to `.agent/audit/<date>.jsonl` — prompts,
 decisions, tool calls, retries, verification, approvals. Inspect one with:

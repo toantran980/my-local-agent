@@ -56,7 +56,8 @@ opt-in Ollama container).
 `DRAFT_PR` and `GH_REPO` for draft PRs, `ADMIN_USER` / `ADMIN_PASSWORD` for the
 auth proxy. `AGENT_MEMORY=0` disables run memory (`AGENT_MEMORY_DIR` relocates it),
 `RAG_URL` points the CLI and nightly job at mcpo's `rag_ops`, `HYBRID_WEIGHT` tunes
-retrieval (0 = vector only). Full table in [README.md](README.md#configuration).
+retrieval (0 = vector only), and `QUERY_REWRITE=1` optionally rewrites search queries.
+Full table in [README.md](README.md#configuration).
 
 ## Constraints
 

@@ -26,7 +26,9 @@
         "RAG_SOURCES": "/repo:/projects",
         "RAG_DB": "/workspace/.rag/index.db",
         "OLLAMA_URL": "http://host.docker.internal:11434",
-        "EMBED_MODEL": "nomic-embed-text"
+        "EMBED_MODEL": "nomic-embed-text",
+        "QUERY_REWRITE": "0",
+        "QUERY_REWRITE_MODEL": "qwen3:8b"
       }
     },
     "projects_ops": {
