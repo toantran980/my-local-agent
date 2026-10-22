@@ -23,11 +23,11 @@ export MY_LOCAL_AGENT_ROOT="/mnt/c/Users/yourname/my-local-agent"
 wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && docker compose up -d --build'
 ```
 
-| Service | Port | Purpose |
-| --- | --- | --- |
-| ollama | 11434 | Inference. Default: the Ollama on your host. Docker container is opt-in: `--profile ollama` (quit host Ollama first) |
-| open-webui | 3000 | Chat UI, opt-in: `docker compose --profile webui up -d open-webui` |
-| mcpo | 8000 | MCP → OpenAPI bridge (5 servers) |
+| Service    | Port  | Purpose                                                                                                                |
+| ---------- | ----- | ---------------------------------------------------------------------------------------------------------------------- |
+| ollama     | 11434 | Inference. Default: the Ollama on your host. Docker container is opt-in: `--profile ollama` (quit host Ollama first) |
+| open-webui | 3000  | Chat UI, opt-in: `docker compose --profile webui up -d open-webui`                                                   |
+| mcpo       | 8000  | MCP → OpenAPI bridge (5 servers)                                                                                      |
 
 The first run pulls a model (~5–6 GB). Later runs are instant. `make up` works
 only where `make` is installed (inside WSL2, not native Windows PowerShell).
@@ -63,7 +63,13 @@ python3 agent_cli.py agent "Fix the syntax error"          # dry-run
 python3 agent_cli.py agent --apply "Fix the syntax error"  # writes under --repo
 python3 agent_cli.py ask --stream "Summarize this repo"    # live tokens
 python3 agent_cli.py agent --plan-first "Fix the syntax error"  # plan, execute, replan
+python3 agent_cli.py agent --plan-first --split-models "Implement a feature"
 ```
+
+`--split-models` uses `AGENT_PLANNER_MODEL` and `AGENT_EXECUTOR_MODEL` when those
+models are installed; otherwise it reports the fallback to `--model`. The optional
+semantic answer cache is off by default; set `AGENT_SEMANTIC_CACHE=1` to enable it
+for tool-free Ask answers.
 
 ## 4. Nightly triage
 
@@ -83,7 +89,9 @@ wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && python3 scripts/nightly-tri
 ```
 
 You should see the tool loop run (`git_status`, `grep`, `gpu_status`,
-`models_list`) and a new report appear in `reports/`.
+`models_list`) and a new report appear in `reports/`. The job also appends runtime
+and GPU VRAM samples to the gitignored `reports/telemetry.jsonl`; anomaly alerts
+are reported after at least five historical samples are available.
 
 ## 5. Evaluation
 
@@ -105,13 +113,14 @@ python3 scripts/eval-rag.py
 
 ## Troubleshooting
 
-| Symptom | Fix |
-| --- | --- |
-| `docker: command not found` | Start Docker Desktop; it provides the CLI in WSL2 |
-| `connection refused :11434` | Stack not up — re-run step 1, allow ~30s for Ollama |
-| No GPU row in smoke test | Model still pulling; re-run step 1 |
-| WebUI won't load on :3000 | Cold start is slow; retry after ~1 min |
-| Cron reports not appearing | `wsl bash -lc 'service cron start'`, then re-run `install-cron.sh` |
+| Symptom                       | Fix                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `docker: command not found` | Start Docker Desktop; it provides the CLI in WSL2                      |
+| `connection refused :11434` or `Ollama is not reachable` | Confirm `http://localhost:11434/api/tags` works inside WSL. If Ollama is Windows-hosted but bound only to `127.0.0.1`, WSL may not be able to reach it; use WSL mirrored networking or configure an `OLLAMA_URL` reachable from WSL without exposing Ollama to an untrusted network. |
+| Eval reports empty replies | Start Ollama and confirm the requested model is listed by `/api/tags` from WSL; the eval script now stops before recording results if the endpoint/model is unavailable. |
+| No GPU row in smoke test      | Model still pulling; re-run step 1                                     |
+| WebUI won't load on :3000     | Cold start is slow; retry after ~1 min                                 |
+| Cron reports not appearing    | `wsl bash -lc 'service cron start'`, then re-run `install-cron.sh` |
 
 Full GPU troubleshooting, optional profiles, and the tool reference live in
 [README.md](README.md). To grant the agent read access to your other project

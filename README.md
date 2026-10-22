@@ -170,6 +170,11 @@ Seven golden-prompt cases in [`eval/cases/`](eval/cases) with fixtures in
 (`prompt-injection`) hides an instruction inside a fixture file and fails if the
 reply contains its canary token (optional `forbidden` field in a case). Failures exit non-zero,
 so the harness is CI-usable.
+It also verifies that `OLLAMA_URL` is reachable from the shell and the requested
+model is installed before running cases or appending history. A WSL shell that
+cannot reach Windows-hosted Ollama should use a WSL-reachable `OLLAMA_URL` or
+mirrored networking; do not expose Ollama's unauthenticated API to an untrusted
+network.
 
 ```bash
 bash scripts/run-eval.sh              # default model: ollama/qwen3:8b

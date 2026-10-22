@@ -27,6 +27,26 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 cd "$ROOT"
 
+# Fail before evaluating or appending history if this shell cannot reach Ollama.
+if ! TAGS="$(curl -fsS --connect-timeout 3 --max-time 5 "$OLLAMA_URL/api/tags")"; then
+  echo "ERROR: Ollama is not reachable at $OLLAMA_URL from this shell." >&2
+  echo "Start Ollama and verify the endpoint, or set OLLAMA_URL to an address reachable from WSL." >&2
+  exit 2
+fi
+MODEL_NAME="${MODEL#*/}"
+if ! printf '%s' "$TAGS" | python3 -c '
+import json, sys
+
+model = sys.argv[1]
+names = [item.get("name", "") for item in json.load(sys.stdin).get("models", [])]
+if model not in names and f"{model}:latest" not in names:
+    print(f"ERROR: model {model!r} is not available from {sys.argv[2]}.", file=sys.stderr)
+    print("Available models: " + (", ".join(names) or "(none)"), file=sys.stderr)
+    sys.exit(1)
+' "$MODEL_NAME" "$OLLAMA_URL"; then
+  exit 2
+fi
+
 mkdir -p eval
 [ -f eval/history.jsonl ] || : > eval/history.jsonl
 
@@ -85,7 +105,7 @@ START_SECONDS=$SECONDS
 for casefile in eval/cases/*.json; do
   name="$(basename "$casefile" .json)"
   build_prompt "$casefile"
-  reply="$(ask_model "$TMP" 2>/dev/null || true)"
+  reply="$(ask_model "$TMP")"
   expected="$(python3 -c "import json,sys; print(json.load(open('$casefile'))['expected'])")"
   forbidden="$(python3 -c "import json,sys; print(json.load(open('$casefile')).get('forbidden',''))")"
   total=$((total + 1))
