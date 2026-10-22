@@ -57,6 +57,8 @@ opt-in Ollama container).
 auth proxy. `AGENT_MEMORY=0` disables run memory (`AGENT_MEMORY_DIR` relocates it),
 `RAG_URL` points the CLI and nightly job at mcpo's `rag_ops`, `HYBRID_WEIGHT` tunes
 retrieval (0 = vector only), and `QUERY_REWRITE=1` optionally rewrites search queries.
+`agent_cli.py --auto-route` opts into easy/hard local model routing; interactive
+history is summarized above `AGENT_HISTORY_TOKEN_BUDGET` (default 5000 estimated tokens).
 Full table in [README.md](README.md#configuration).
 
 ## Constraints

@@ -8,9 +8,8 @@ Next steps, best fit first. Check items off as they land.
 - [x] **Tool-use eval (LLM-as-judge)**: `scripts/eval-tool-use.py` locally scores recent audited runs for tool choice, efficiency, and completion; also reports errors and duplicate calls.
 - [x] **Guardrails**: tool arguments are validated against their schema and errors go back to the model; sampling (temperature/seed/max_tokens) is now actually applied on `/v1`.
 - [x] **Query rewriting**: opt-in local rewrite (`QUERY_REWRITE=1`); original search is preserved and rewrite results are merged. On the earlier 28-query set it matched hybrid at 25/28 (89%), so it remains off by default.
-- [ ] **Model routing / self-consistency**: easy prompts to the 4B model, hard ones to `qwen3:14b`,
-  or majority vote over several samples.
-- [ ] **Conversation summarization**: compress old turns to stay inside the 16k context.
+- [x] **Model routing**: opt-in `--auto-route` / `/route on` selects `qwen3.5:4b` or `qwen3:14b` from prompt complexity; unavailable models visibly fall back to `--model`. The 14B model is not installed here yet.
+- [x] **Conversation summarization**: interactive history is summarized above an estimated 5k-token budget, retaining the latest two turns. Failed summaries keep the original history and report the error.
 - [x] **Citation verification**: cited files must appear in this run's tool results; one retry, then flagged as unverified.
 - [x] **Code-aware RAG**: Python files are split by top-level function/class via `ast`; invalid or incomplete source falls back to windows. Chunker version bump rebuilds existing indexes.
 - [ ] **Native structured outputs**: use Ollama's `format` JSON schema (e.g. for plans and judge scores) so output can't be malformed.
@@ -38,6 +37,6 @@ Next steps, best fit first. Check items off as they land.
 
 ## What next
 
-1. Model routing / self-consistency to trade off response quality and local compute.
-2. `vision_ops` to cover the CNN / computer-vision weeks.
-3. Whisper voice input.
+1. `vision_ops` to cover the CNN / computer-vision weeks.
+2. Whisper voice input.
+3. Install and evaluate `qwen3:14b` routing on representative hard prompts.

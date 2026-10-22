@@ -11,13 +11,17 @@ from agent_cli import (
     LocalTools,
     RunResult,
     apply_pending_writes,
+    choose_model,
+    estimate_history_tokens,
     finish_run,
     is_sensitive_path,
     post,
     post_stream,
     resolve_repo_path,
+    routed_model,
     run_agent,
     run_planned,
+    summarize_history,
     system_prompt,
     tool_definitions,
     validate_arguments,
@@ -169,6 +173,59 @@ class AgentFeatureTests(unittest.TestCase):
             payload = json.loads(opened.call_args.args[0].data)
         self.assertEqual((payload["temperature"], payload["seed"]), (0, 0))
         self.assertNotIn("options", payload)
+
+    def test_model_router_uses_easy_and_hard_models(self):
+        self.assertEqual(routed_model("What is this repository for?"), "qwen3.5:4b")
+        self.assertEqual(
+            routed_model("Debug the API authentication failure and add regression tests."),
+            "qwen3:14b",
+        )
+
+    def test_choose_model_falls_back_when_route_target_is_unavailable(self):
+        with mock.patch("agent_cli._installed_models", return_value={"qwen3:8b"}):
+            selected, warning = choose_model(
+                "Debug the API authentication failure and add regression tests.",
+                "qwen3:8b",
+                "http://x",
+            )
+        self.assertEqual(selected, "qwen3:8b")
+        self.assertIn("ollama pull qwen3:14b", warning)
+
+    def test_run_agent_uses_and_audits_routed_model(self):
+        with mock.patch("agent_cli.choose_model", return_value=("qwen3.5:4b", None)), mock.patch(
+            "agent_cli.post", return_value=_reply("simple answer")
+        ) as post:
+            run_agent(
+                "ask", "short question", self.repo, "qwen3:8b", "http://x",
+                apply=False, auto_route=True,
+            )
+        self.assertEqual(post.call_args.args[1]["model"], "qwen3.5:4b")
+
+    def test_summarize_history_preserves_recent_messages(self):
+        history = [
+            {"role": "user", "content": f"question {index} " + "x" * 100}
+            if index % 2 == 0 else {"role": "assistant", "content": f"answer {index} " + "y" * 100}
+            for index in range(12)
+        ]
+        summary = json.dumps({"summary": "Earlier goal: fix RAG."})
+        body = json.dumps({"message": {"content": summary}})
+        with mock.patch("agent_cli.HISTORY_TOKEN_BUDGET", 1), mock.patch(
+            "agent_cli.urllib.request.urlopen", return_value=io.BytesIO(body.encode())
+        ):
+            compacted = summarize_history(history, "qwen3:8b", "http://x")
+        self.assertEqual(len(compacted), 1 + 4)
+        self.assertIn("untrusted context", compacted[0]["content"])
+        self.assertEqual(compacted[1:], history[-4:])
+        self.assertLess(estimate_history_tokens(compacted), estimate_history_tokens(history))
+
+    def test_summarize_history_skips_small_history(self):
+        history = [{"role": "user", "content": "short"}]
+        with mock.patch("agent_cli.HISTORY_TOKEN_BUDGET", 100), mock.patch(
+            "agent_cli.urllib.request.urlopen"
+        ) as opened:
+            self.assertIs(summarize_history(history, "qwen3:8b", "http://x"), history)
+        opened.assert_not_called()
+
     def test_unsupported_citation_triggers_one_retry(self):
         search = {"id": "1", "function": {"name": "semantic_search",
                                           "arguments": json.dumps({"query": "vram"})}}

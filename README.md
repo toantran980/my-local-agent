@@ -82,6 +82,7 @@ python3 agent_cli.py ask "What is 2+2?"                    # read-only
 python3 agent_cli.py plan "Add health checks"               # plan, no writes
 python3 agent_cli.py agent "Fix the syntax error"           # dry-run patch
 python3 agent_cli.py agent --apply "Fix the syntax error"   # writes under --repo
+python3 agent_cli.py ask --auto-route "Explain this module" # route by task complexity
 python3 agent_cli.py agent                                 # interactive
 ```
 
@@ -91,6 +92,7 @@ python3 agent_cli.py agent                                 # interactive
 | `--model` | `$AGENT_MODEL` or `qwen3:8b` | |
 | `--url` | `$OLLAMA_URL` or `http://localhost:11434` | |
 | `--apply` | off | Permits writes in agent mode; requires confirmation |
+| `--auto-route` | off | Route easy prompts to a small model and complex prompts to a larger one |
 
 Safety rails, all enforced in code: max 10 tool steps per run, 32KB read cap,
 sensitive paths (`.env`, keys, certs) blocked, credentials redacted before audit.
@@ -106,6 +108,8 @@ More agent behavior:
 | Feature | How |
 |---|---|
 | Streaming | `--stream` prints tokens as they arrive (reasoning shows as `(thinking...)`) |
+| Model routing | `--auto-route` (or `/route on` interactively) uses `qwen3.5:4b` for easy prompts and `qwen3:14b` for prompts with multiple complexity signals. Missing target models visibly fall back to `--model`; pull the 14B model with `ollama pull qwen3:14b` to enable the hard route. |
+| Conversation context | Interactive history is summarized when it exceeds an estimated 5,000 tokens; the latest two turns are kept verbatim. `AGENT_HISTORY_TOKEN_BUDGET` tunes the approximate threshold. A failed summary is reported and the original history is kept. |
 | Planner/executor | `agent --plan-first "task"` plans, executes, and replans once if tests fail |
 | Reflect-and-retry | In agent mode, staged writes are tested automatically; a failure is fed back once for a fix |
 | Memory | Each run appends a redacted summary to `workspace/memory/<date>.md` (indexed by RAG); `AGENT_MEMORY=0` disables, `AGENT_MEMORY_DIR` relocates |
@@ -206,6 +210,8 @@ Copy `.env.example` to `.env`. All values have defaults.
 | `MY_LOCAL_AGENT_ROOT` | cwd | Repo root as a WSL path; no hardcoded paths anywhere |
 | `OLLAMA_URL` | `http://localhost:11434` | Inference endpoint |
 | `AGENT_MODEL` | `qwen3:8b` | Model for `agent_cli.py` |
+| `AGENT_EASY_MODEL` / `AGENT_HARD_MODEL` | `qwen3.5:4b` / `qwen3:14b` | Targets for opt-in `--auto-route` |
+| `AGENT_HISTORY_TOKEN_BUDGET` | `5000` | Approximate history size that triggers interactive summarization |
 | `NIGHTLY_MODEL` | `qwen3:8b` | Model for nightly triage |
 | `CRON_HOUR` / `CRON_MIN` | `17` / `0` | Nightly schedule |
 | `DRAFT_PR` / `GH_REPO` | `0` / — | Draft PR automation |
