@@ -1,8 +1,8 @@
 # AGENTS.md
 
 Context for AI agents working in this repo. Human-facing docs live in
-[README.md](README.md), [QUICKSTART.md](QUICKSTART.md), and
-[PROJECTS.md](PROJECTS.md).
+[README.md](README.md), [QUICKSTART.md](QUICKSTART.md), [PROJECTS.md](PROJECTS.md),
+and focused guides under [`docs/`](docs/).
 
 ## What this is
 
@@ -26,7 +26,7 @@ a nightly triage job.
 | `reports/` | Nightly triage output, `YYYY-MM-DD.md` (gitignored); mounted read-only into `mcpo` at `/data/reports` |
 | `.agent/audit/` | Per-run JSONL audit trail (gitignored) |
 | `workspace/` | Agent file sandbox, the only writable MCP mount |
-| `docs/` | Framework analysis, not operational docs |
+| `docs/` | Configuration, RAG, and framework guides |
 
 ## Commands
 
@@ -64,7 +64,8 @@ history is summarized above `AGENT_HISTORY_TOKEN_BUDGET` (default 5000 estimated
 `python3 agent_cli.py agent --plan-first --split-models` uses `AGENT_PLANNER_MODEL` and
 `AGENT_EXECUTOR_MODEL`; unavailable models visibly fall back to `--model`.
 Nightly telemetry and anomaly notes are written under gitignored `reports/`.
-Full table in [README.md](README.md#configuration).
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full environment table
+and [docs/RAG.md](docs/RAG.md) for retrieval settings.
 
 ## Constraints
 

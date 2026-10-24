@@ -2,7 +2,12 @@
 
 ## Executive Summary
 
-Your current custom 400-line `agent_cli.py` could be enhanced with Hugging Face Transformers and LangChain/LangGraph, but this represents a significant architectural shift with trade-offs. The decision depends on your goals: **learning/fundamentals** (keep custom) vs **rapid development/ecosystem** (adopt frameworks).
+The custom terminal agent is implemented in the stdlib-only `agent/` package
+behind the `agent_cli.py` entry point. It could be enhanced with Hugging Face
+Transformers and LangChain/LangGraph, but that would be a significant
+architectural shift with trade-offs. The decision depends on your goals:
+**learning/fundamentals** (keep the custom implementation) versus
+**rapid development/ecosystem** (adopt frameworks).
 
 ## Hugging Face Transformers Integration
 
@@ -237,7 +242,7 @@ agent = create_openai_functions_agent(llm, tools, prompt)
 
 **Keep Custom for Core Security** because:
 
-- Your 400-line implementation is perfect for your use case
+- The purpose-built implementation keeps the current use case small and auditable
 - Security boundaries are explicit and debuggable
 - No unnecessary dependencies
 - You control every aspect of the execution loop

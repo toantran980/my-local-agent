@@ -109,6 +109,7 @@ ollama pull nomic-embed-text      # host Ollama (default setup)
 python3 scripts/eval-rag.py
 ```
 
+See [docs/RAG.md](docs/RAG.md) for retrieval settings and indexing details.
 ---
 
 ## Troubleshooting
@@ -122,8 +123,8 @@ python3 scripts/eval-rag.py
 | WebUI won't load on :3000                                    | Cold start is slow; retry after ~1 min                                                                                                                                                                                                                                                     |
 | Cron reports not appearing                                   | `wsl bash -lc 'service cron start'`, then re-run `install-cron.sh`                                                                                                                                                                                                                     |
 
-Full GPU troubleshooting, optional profiles, and the tool reference live in
-[README.md](README.md). To grant the agent read access to your other project
-directories, see [PROJECTS.md](PROJECTS.md).
+For model and environment settings, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+For read-only access to your other project directories, see [PROJECTS.md](PROJECTS.md).
 
-All data stays local. Nothing in this project calls a cloud API.
+Inference and agent data are local by default. The optional `fetch` MCP server
+can make HTTP requests when explicitly used.
