@@ -32,7 +32,7 @@ Next steps, best fit first. Check items off as they land.
 
 ## Housekeeping
 
-- [ ] Check `PROJECTS.md` and `docs/` for stale references.
+- [x] Check `PROJECTS.md` and `docs/` for stale references.
 - [ ] Run the reflection and planner paths against a live model on more than one prompt.
 
 ## What next
