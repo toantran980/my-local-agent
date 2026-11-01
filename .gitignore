@@ -24,3 +24,5 @@ workspace/*
 .idea/
 .DS_Store
 Thumbs.db
+
+*.zip
