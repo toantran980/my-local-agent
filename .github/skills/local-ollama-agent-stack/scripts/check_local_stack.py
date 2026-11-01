@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Check local Ollama and mcpo health without sending prompts or changing state."""
 
 from __future__ import annotations
