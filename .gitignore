@@ -26,3 +26,5 @@ workspace/*
 Thumbs.db
 
 *.zip
+
+/PAID-SKILLS-LICENSE.md
