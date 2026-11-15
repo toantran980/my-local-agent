@@ -153,7 +153,11 @@ def _get(path, timeout=300):
     return _urlopen(req, timeout)
 
 
-def run_tool(name, args):  # noqa: PLR0911
+def _local_day():
+    return dt.datetime.now().astimezone().date().isoformat()
+
+
+def run_tool(name, args, day=None):  # noqa: PLR0911
     try:
         if name == "git_status":
             st = subprocess.run(
@@ -209,15 +213,15 @@ def run_tool(name, args):  # noqa: PLR0911
             )
         if name == "write_report":
             md = args.get("markdown", "")
-            day = dt.datetime.now(dt.UTC).date().isoformat()
-            out = ROOT / "reports" / f"{day}.md"
+            report_day = day or _local_day()
+            out = ROOT / "reports" / f"{report_day}.md"
             out.parent.mkdir(exist_ok=True)
             out.write_text(md + "\n", encoding="utf-8")
             # Optional PR-gated autonomy (README gap #1): DRAFT_PR=1 lifts the
             # nightly report into a draft PR you approve before merge.
             if os.environ.get("DRAFT_PR") == "1" and os.environ.get("GH_REPO"):
-                tag = "chore: nightly triage report " + day
-                body_file = ROOT / "reports" / f"{day}.pr.md"
+                tag = "chore: nightly triage report " + report_day
+                body_file = ROOT / "reports" / f"{report_day}.pr.md"
                 body_file.write_text(md + "\n", encoding="utf-8")
                 subprocess.run(
                     [
@@ -243,33 +247,6 @@ def run_tool(name, args):  # noqa: PLR0911
         return f"TOOL-ERROR {name}: command timed out"
     except BaseException as e:  # noqa: BLE001
         return f"TOOL-ERROR {name}: {e}"
-
-
-def _urlopen(req, timeout=300):
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            raw = r.read()
-            return json.loads(raw)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", "replace")
-        if e.code == HTTP_BAD_REQUEST and not body:
-            return {"choices": [{"message": {"content": "", "tool_calls": None}}]}
-        raise
-
-
-def _post(path, payload, timeout=300):
-    body = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        f"{OLLAMA_URL}{path}",
-        data=body,
-        headers={"Content-Type": "application/json"},
-    )
-    return _urlopen(req, timeout)
-
-
-def _get(path, timeout=300):
-    req = urllib.request.Request(f"{OLLAMA_URL}{path}")
-    return _urlopen(req, timeout)
 
 
 def complete(messages):
@@ -378,7 +355,7 @@ def record_telemetry(
             }
         )
     current = {
-        "date": day or dt.datetime.now(dt.UTC).date().isoformat(),
+        "date": day or _local_day(),
         "duration_seconds": round(max(0.0, duration_seconds), 3),
         "models": models,
     }
@@ -408,8 +385,7 @@ def main():  # noqa: PLR0912
 
     refresh_rag_index()
 
-    if args.day:
-        globals()["_DAY"] = args.day
+    day = args.day or _local_day()
 
     system = (
         "You are the nightly triage agent for a local self-hosted AI stack: "
@@ -444,7 +420,7 @@ def main():  # noqa: PLR0912
                     tool_args = json.loads(args_json or "{}")
                 except json.JSONDecodeError:
                     tool_args = {}
-                result = run_tool(name, tool_args)
+                result = run_tool(name, tool_args, day=day)
                 if name == "gpu_status":
                     gpu_status = result
                 if name == "write_report":
@@ -455,24 +431,23 @@ def main():  # noqa: PLR0912
         else:
             # if the model bailed without write_report, still persist a report
             if not report_written:
-                p = ROOT / "reports" / f"{dt.datetime.now(dt.UTC).date().isoformat()}-fallback.md"
+                p = ROOT / "reports" / f"{day}-fallback.md"
                 p.parent.mkdir(exist_ok=True)
                 p.write_text(msg.get("content", "") + "\n", encoding="utf-8")
                 print(f"fallback report -> {p.relative_to(ROOT)}")
             else:
-                today = dt.datetime.now(dt.UTC).date().isoformat()
-                f = ROOT / "reports" / f"{today}.md"
+                f = ROOT / "reports" / f"{day}.md"
                 if f.exists():
                     print(f"report -> {f.relative_to(ROOT)}")
             try:
-                alerts = record_telemetry(time.monotonic() - started, gpu_status)
+                alerts = record_telemetry(time.monotonic() - started, gpu_status, day=day)
                 print(f"telemetry: recorded; {len(alerts)} anomaly alert(s)")
             except (OSError, ValueError) as exc:
                 print(f"telemetry recording failed: {exc}", file=sys.stderr)
             return 0
     print(f"no final answer in loop budget; report_written={report_written}")
     try:
-        record_telemetry(time.monotonic() - started, gpu_status)
+        record_telemetry(time.monotonic() - started, gpu_status, day=day)
     except (OSError, ValueError) as exc:
         print(f"telemetry recording failed: {exc}", file=sys.stderr)
     return 0 if report_written else 2

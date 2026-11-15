@@ -63,3 +63,17 @@ def test_record_telemetry_parses_gpu_report_and_appends_check(tmp_path):
     report = (report_root / "2026-10-21.md").read_text(encoding="utf-8")
     assert "Telemetry anomaly check" in report
     assert "unusually high" in report
+
+
+def test_write_report_uses_scheduled_day(tmp_path, monkeypatch):
+    monkeypatch.setattr(nightly, "ROOT", tmp_path)
+
+    result = nightly.run_tool(
+        "write_report",
+        {"markdown": "# Nightly report"},
+        day="2026-11-14",
+    )
+
+    report = tmp_path / "reports" / "2026-11-14.md"
+    assert report.read_text(encoding="utf-8") == "# Nightly report\n"
+    assert result.startswith(f"wrote {Path('reports') / '2026-11-14.md'}")
