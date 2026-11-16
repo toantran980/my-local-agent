@@ -82,6 +82,11 @@ Installs a 5:00 PM daily entry (`CRON_HOUR` / `CRON_MIN` override). Reports land
 in `reports/YYYY-MM-DD.md`. To get a draft PR per report as well, set `DRAFT_PR=1`
 and `GH_REPO=owner/repo` before installing.
 
+For the scheduled run, WSL must be running with cron active, and Ollama with the
+configured `NIGHTLY_MODEL` must be reachable from WSL. Ollama can run on the
+Windows host or in the optional Docker container; Docker is needed only for the
+container setup. Check `logs/nightly-triage.log` if a report is missing.
+
 Prove it works without waiting for cron:
 
 ```bash
@@ -121,7 +126,7 @@ See [docs/RAG.md](docs/RAG.md) for retrieval settings and indexing details.
 | Eval reports empty replies                                   | Start Ollama and confirm the requested model is listed by `/api/tags` from WSL; the eval script now stops before recording results if the endpoint/model is unavailable.                                                                                                                 |
 | No GPU row in smoke test                                     | Model still pulling; re-run step 1                                                                                                                                                                                                                                                         |
 | WebUI won't load on :3000                                    | Cold start is slow; retry after ~1 min                                                                                                                                                                                                                                                     |
-| Cron reports not appearing                                   | `wsl bash -lc 'service cron start'`, then re-run `install-cron.sh`                                                                                                                                                                                                                     |
+| Cron reports not appearing                                   | Confirm WSL is running, `service cron status` is active, and `curl -fsS http://localhost:11434/api/tags` works inside WSL. Check `logs/nightly-triage.log`; reinstall with `CRON_HOUR=17 CRON_MIN=0` if the entry is missing or points to an old repo path. |
 
 For model and environment settings, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 For read-only access to your other project directories, see [PROJECTS.md](PROJECTS.md).

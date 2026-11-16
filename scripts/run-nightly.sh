@@ -12,15 +12,16 @@ mkdir -p "$ROOT/logs" "$ROOT/reports"
 # Wait for Ollama API (max 5 minutes)
 echo "[$(date)] Waiting for Ollama at http://localhost:11434..." | tee -a "$LOG"
 for i in {1..60}; do
-    if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+    if curl -fsS --connect-timeout 2 --max-time 3 \
+        http://localhost:11434/api/tags >/dev/null 2>&1; then
         echo "[$(date)] Ollama ready" | tee -a "$LOG"
         break
     fi
-    sleep 5
     if (( i == 60 )); then
         echo "[$(date)] ERROR: Ollama not ready after 5 minutes" | tee -a "$LOG"
         exit 1
     fi
+    sleep 2
 done
 
 echo "[$(date)] Starting nightly triage for $DAY" | tee -a "$LOG"
