@@ -32,10 +32,12 @@ Docker Compose profiles.
 | [`mcp/local_ops.py`](mcp/local_ops.py) | Read-only git, GPU, system, and report tools |
 | [`mcp/projects_ops.py`](mcp/projects_ops.py) | Optional read-only access to selected project, config, and log directories |
 | [`mcp/rag_ops.py`](mcp/rag_ops.py) | Local indexing and semantic search |
+| [`mcp/vision_ops.py`](mcp/vision_ops.py) | Read-only image question answering with local Ollama vision models |
 | [`scripts/nightly-triage.py`](scripts/nightly-triage.py) | Scheduled local health and repository report |
 | [`eval/`](eval) | Agent and retrieval evaluation cases |
 
 mcpo loads the MCP servers listed in [`mcpo/config.json`](mcpo/config.json).
+See [docs/VISION.md](docs/VISION.md) to configure and use the local vision tool.
 Open WebUI can connect to each server at `http://mcpo:8000/<server-name>`.
 
 ## Agent modes
@@ -57,8 +59,12 @@ variables documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 ## Safety and data
 
 - Agent writes stay under `--repo`; writes require `--apply` and confirmation.
-- Tool reads are capped at 32 KB; writes are capped at 1 MB.
+- Text tool reads are capped at 32 KB; writes are capped at 1 MB. Vision image
+  reads are restricted to `VISION_IMAGE_DIRS` (default `/workspace`) and 10 MiB
+  by default.
 - Credential files and runtime directories are blocked from tool access.
+- Vision images are sent to the configured Ollama endpoint; use a trusted local
+  endpoint when images must remain local.
 - Audit records are local JSONL files under `.agent/audit/`; credentials are
   redacted before they are recorded.
 - RAG sources are read-only. Its SQLite index is stored under
@@ -73,6 +79,7 @@ variables documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 | [QUICKSTART.md](QUICKSTART.md) | Setup, everyday commands, smoke test, evaluation, and troubleshooting |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Environment variables and model/VRAM guidance |
 | [docs/RAG.md](docs/RAG.md) | Indexing, retrieval behavior, and RAG settings |
+| [docs/VISION.md](docs/VISION.md) | Local image question answering and access limits |
 | [PROJECTS.md](PROJECTS.md) | Enabling read-only access to external project directories |
 | [AGENTS.md](AGENTS.md) | Repository layout, development commands, and contributor constraints |
 | [workspace/README.md](workspace/README.md) | Agent workspace and sandbox |

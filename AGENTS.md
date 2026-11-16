@@ -19,14 +19,15 @@ a nightly triage job.
 | `mcp/local_ops.py` | MCP server: git, GPU, system, eval introspection |
 | `mcp/projects_ops.py` | MCP server: read-only project file access |
 | `mcp/rag_ops.py` | MCP server: local RAG (Ollama embeddings + SQLite index) |
-| `mcpo/` | MCP→OpenAPI bridge image + `config.json` (5 servers) |
+| `mcp/vision_ops.py` | MCP server: allowlisted read-only image question answering |
+| `mcpo/` | MCP→OpenAPI bridge image + `config.json` (6 servers) |
 | `scripts/` | smoke test, eval harness, nightly triage, cron, audit viewer |
 | `eval/` | `cases/*.json`, `fixtures/`, `rag/` (retrieval eval), `history.jsonl` |
-| `tests/` | pytest suite for `agent_cli.py` and `rag_ops.py` |
+| `tests/` | pytest suite for the agent CLI and MCP servers |
 | `reports/` | Nightly triage output, `YYYY-MM-DD.md` (gitignored); mounted read-only into `mcpo` at `/data/reports` |
 | `.agent/audit/` | Per-run JSONL audit trail (gitignored) |
 | `workspace/` | Agent file sandbox, the only writable MCP mount |
-| `docs/` | Configuration, RAG, and framework guides |
+| `docs/` | Configuration, RAG, vision, and framework guides |
 
 ## Commands
 
@@ -65,7 +66,8 @@ history is summarized above `AGENT_HISTORY_TOKEN_BUDGET` (default 5000 estimated
 `AGENT_EXECUTOR_MODEL`; unavailable models visibly fall back to `--model`.
 Nightly telemetry and anomaly notes are written under gitignored `reports/`.
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full environment table
-and [docs/RAG.md](docs/RAG.md) for retrieval settings.
+and [docs/RAG.md](docs/RAG.md) for retrieval settings. See [docs/VISION.md](docs/VISION.md)
+for image access and model configuration.
 
 ## Constraints
 
@@ -74,12 +76,16 @@ Do not violate these — they are enforced in code:
 - Services bind to `127.0.0.1` only. Ollama's API has no auth.
 - `agent_cli.py` writes only under `--repo`, and only with `--apply`.
 - Max 10 tool steps per run (`MAX_TOOL_STEPS` in `agent/config.py`).
-- 32KB read cap (`MAX_FILE_BYTES`); 1MB write cap.
+- 32KB text read cap (`MAX_FILE_BYTES`); 1MB write cap. `vision_ops` separately
+  allows images only under `VISION_IMAGE_DIRS` (default `/workspace`), up to
+  10 MiB by default.
 - Sensitive paths (`.env`, keys, certs) are blocked from read and write.
 - Credentials are redacted before anything is written to the audit log.
 - `projects_ops` is read-only; `/projects`, `/configs`, `/logs` mount `:ro`.
 - `rag_ops` never writes to sources; it only writes its index to `/workspace/.rag`
   and skips sensitive files.
+- `vision_ops` reads only allowlisted image files and sends their contents to
+  the configured Ollama endpoint; use a trusted local endpoint for private images.
 - Agent memory (`workspace/memory/`) is redacted and stores only test-verified Agent
   runs; keep it inside `workspace/`, the only writable sandbox. The semantic answer
   cache is also local and redacted, under `workspace/.agent/`.

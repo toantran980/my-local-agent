@@ -6,7 +6,8 @@ directories. This is opt-in: the volumes are commented out in
 `docker-compose.yml` until you enable them.
 
 Related: [README.md](README.md) for the full stack,
-[QUICKSTART.md](QUICKSTART.md) for first-time setup.
+[QUICKSTART.md](QUICKSTART.md) for first-time setup, and
+[`docs/VISION.md`](docs/VISION.md) for the local image tool's workspace access.
 
 ---
 
@@ -132,6 +133,7 @@ Every constraint below is enforced in code, not by convention:
 | `projects_ops` | `/projects`, `/configs`, `/logs` | read-only | 32KB read |
 | `local_ops` | `/repo`, `/data`, `/workspace` | read-only | 32KB read |
 | `rag_ops` | `/repo`, `/projects` | read-only; writes only its index under `/workspace/.rag` | 200KB per file indexed |
+| `vision_ops` | `/workspace` by default; configurable allowlist | Reads an image and sends it to configured Ollama | JPG/JPEG/PNG/WebP, 10 MiB default |
 | `agent_cli.py` | `--repo` | read; write with `--apply` | 32KB read, 1MB write |
 
 ---

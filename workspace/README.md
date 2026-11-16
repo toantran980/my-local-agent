@@ -6,5 +6,9 @@ directory. It is shared between:
   WSL2/host : ./workspace
   mcpo      : /workspace
 
+The optional `vision_ops` tool can read supported images in this directory to
+answer questions. It sends image contents to the configured Ollama endpoint;
+see [the vision guide](../docs/VISION.md).
+
 Use it for the smoke test: ask the model to write a file here, then check it
 shows up on the host.

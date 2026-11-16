@@ -8,14 +8,9 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends git nodejs npm \
  && rm -rf /var/lib/apt/lists/*
 
-# mcpo = MCP -> OpenAPI proxy (maintained by the Open WebUI team).
-# uv provides `uvx`, which runs the `fetch` stdio MCP server from PyPI.
-# mcp = the SDK our /opt/mcp/local_ops.py server is built on.
-# <2 required: mcpo 0.0.x still imports the legacy streamablehttp_client,
-# which the mcp SDK removed in 2.x (see the v1->v2 migration guide).
-# fastapi<0.142 required: mcpo 0.0.20 passes ssl_certfile to FastAPI(), which newer
-# releases reject with a TypeError at startup.
-RUN pip install --no-cache-dir mcpo uv "mcp<2" "fastapi<0.142"
+# mcpo/requirements.txt contains the bridge and MCP server Python dependencies.
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # filesystem server, installed globally at build time so startup is offline.
 RUN npm install -g @modelcontextprotocol/server-filesystem

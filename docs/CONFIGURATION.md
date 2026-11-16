@@ -28,6 +28,13 @@ respective variables from the process environment.
 RAG-specific settings (`HYBRID_WEIGHT`, `QUERY_REWRITE`, and
 `QUERY_REWRITE_MODEL`) are documented in [RAG.md](RAG.md).
 
+The vision MCP server's `VISION_MODEL`, `VISION_IMAGE_DIRS`, and
+`VISION_MAX_IMAGE_BYTES` settings are supplied in
+[`mcpo/config.json`](../mcpo/config.json). Defaults are `qwen2.5vl:7b`,
+`/workspace`, and 10 MiB. Image contents are sent to the `OLLAMA_URL` configured
+for that server. See [VISION.md](VISION.md) for the allowlist and data-handling
+details.
+
 ## GPU memory guidance
 
 The default deployment targets a 16 GB GPU:

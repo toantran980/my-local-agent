@@ -1,0 +1,8 @@
+# mcpo wraps the stdio MCP servers as OpenAPI endpoints.
+mcpo
+# Provides uvx for the fetch MCP server.
+uv
+# mcpo 0.0.x uses the MCP SDK v1 API.
+mcp>=1.0.0,<2
+# Required by mcpo 0.0.20, which passes ssl_certfile to FastAPI().
+fastapi<0.142

@@ -31,6 +31,16 @@
         "QUERY_REWRITE_MODEL": "qwen3:8b"
       }
     },
+    "vision_ops": {
+      "command": "python",
+      "args": ["/opt/mcp/vision_ops.py"],
+      "env": {
+        "OLLAMA_URL": "http://host.docker.internal:11434",
+        "VISION_MODEL": "qwen2.5vl:7b",
+        "VISION_IMAGE_DIRS": "/workspace",
+        "VISION_MAX_IMAGE_BYTES": "10485760"
+      }
+    },
     "projects_ops": {
       "command": "python",
       "args": ["/opt/mcp/projects_ops.py"],

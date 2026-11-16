@@ -1,5 +1,13 @@
-# Core agent CLI (stdlib only, no runtime deps needed)
+# Full Python development environment for the project.
+# The agent CLI itself uses only the standard library.
 pytest
+mcp>=1.0.0,<2
 
-# MCP server dependencies
-mcp>=1.0.0
+# Local MCP-to-OpenAPI bridge and its CLI dependency.
+mcpo
+uv
+fastapi<0.142
+
+# CI-equivalent Python lint tools.
+ruff
+shellcheck-py

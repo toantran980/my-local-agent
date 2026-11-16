@@ -7,6 +7,15 @@ match what is actually in this repo.
 an NVIDIA GPU with a current driver, and `wsl` on your PATH. Everything else comes
 from the compose file.
 
+For the complete local Python development environment, install
+`requirements.txt` (runtime, bridge, tests, and lint tools). The mcpo Docker
+image installs only its runtime dependencies from `mcpo/requirements.txt` when
+Compose builds it.
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
 **Portable paths.** Set `MY_LOCAL_AGENT_ROOT` to your repo root as a WSL path.
 Every command below falls back to the current directory, so you can skip this if
 you `cd` into the repo first.
@@ -27,11 +36,21 @@ wsl bash -lc 'cd "${MY_LOCAL_AGENT_ROOT:-$(pwd)}" && docker compose up -d --buil
 | ---------- | ----- | ---------------------------------------------------------------------------------------------------------------------- |
 | ollama     | 11434 | Inference. Default: the Ollama on your host. Docker container is opt-in: `--profile ollama` (quit host Ollama first) |
 | open-webui | 3000  | Chat UI, opt-in: `docker compose --profile webui up -d open-webui`                                                   |
-| mcpo       | 8000  | MCP → OpenAPI bridge (5 servers)                                                                                      |
+| mcpo       | 8000  | MCP → OpenAPI bridge (6 servers)                                                                                      |
 
-The first run pulls a model (~5–6 GB). Later runs are instant. `make up` works
-only where `make` is installed (inside WSL2, not native Windows PowerShell).
-Port 11434 must be free: quit any Ollama app running on the Windows host first.
+The first build downloads the container images. Pull the default model into the
+active Ollama instance before the smoke test:
+
+```bash
+ollama pull qwen3:8b
+```
+
+Later starts reuse the downloaded images and model. `make up` works only where
+`make` is installed (inside WSL2, not native Windows PowerShell). Port 11434
+must be reachable by the configured Ollama instance. The default setup uses
+Ollama on the host. If using the optional Ollama container, stop host Ollama
+first because both use port 11434, then pull the model with
+`docker exec local_ollama ollama pull qwen3:8b`.
 
 ## 2. Verify
 
@@ -117,6 +136,13 @@ python3 scripts/eval-rag.py
 See [docs/RAG.md](docs/RAG.md) for retrieval settings and indexing details.
 ---
 
+## 6. Vision image questions (optional)
+
+The `vision_ops` MCP server can answer questions about images in the mounted
+workspace. The default model is installed with `ollama pull qwen2.5vl:7b`.
+Follow [docs/VISION.md](docs/VISION.md) to connect the tool and configure its
+image access limits.
+
 ## Troubleshooting
 
 | Symptom                                                      | Fix                                                                                                                                                                                                                                                                                        |
@@ -130,6 +156,7 @@ See [docs/RAG.md](docs/RAG.md) for retrieval settings and indexing details.
 
 For model and environment settings, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 For read-only access to your other project directories, see [PROJECTS.md](PROJECTS.md).
+For image question answering, see [docs/VISION.md](docs/VISION.md).
 
 Inference and agent data are local by default. The optional `fetch` MCP server
 can make HTTP requests when explicitly used.
