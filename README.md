@@ -26,19 +26,34 @@ Docker Compose profiles.
 
 ## Components
 
-| Component | Purpose |
-| --- | --- |
-| [`agent_cli.py`](agent_cli.py) and [`agent/`](agent) | Stdlib-only terminal agent with Ask, Plan, and Agent modes |
-| [`mcp/local_ops.py`](mcp/local_ops.py) | Read-only git, GPU, system, and report tools |
-| [`mcp/projects_ops.py`](mcp/projects_ops.py) | Optional read-only access to selected project, config, and log directories |
-| [`mcp/rag_ops.py`](mcp/rag_ops.py) | Local indexing and semantic search |
-| [`mcp/vision_ops.py`](mcp/vision_ops.py) | Read-only image question answering with local Ollama vision models |
-| [`scripts/nightly-triage.py`](scripts/nightly-triage.py) | Scheduled local health and repository report |
-| [`eval/`](eval) | Agent and retrieval evaluation cases |
+| Component                                                 | Purpose                                                                    |
+| --------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [`agent_cli.py`](agent_cli.py) and [`agent/`](agent)    | Stdlib-only terminal agent with Ask, Plan, and Agent modes                 |
+| [`mcp/local_ops.py`](mcp/local_ops.py)                   | Read-only git, GPU, system, and report tools                               |
+| [`mcp/projects_ops.py`](mcp/projects_ops.py)             | Optional read-only access to selected project, config, and log directories |
+| [`mcp/rag_ops.py`](mcp/rag_ops.py)                       | Local indexing and semantic search                                         |
+| [`mcp/vision_ops.py`](mcp/vision_ops.py)                 | Read-only image question answering with local Ollama vision models         |
+| [`scripts/nightly-triage.py`](scripts/nightly-triage.py) | Scheduled local health and repository report                               |
+| [`eval/`](eval)                                          | Agent and retrieval evaluation cases                                       |
 
 mcpo loads the MCP servers listed in [`mcpo/config.json`](mcpo/config.json).
 See [docs/VISION.md](docs/VISION.md) to configure and use the local vision tool.
 Open WebUI can connect to each server at `http://mcpo:8000/<server-name>`.
+
+## Test vision in WSL2
+
+With the stack running, pull the configured vision model and copy a supported
+image into the mounted workspace:
+
+```bash
+ollama pull qwen2.5vl:7b
+curl --max-time 300 -sS -X POST http://localhost:8000/vision_ops/ask_about_image \
+  -H "Content-Type: application/json" \
+  -d '{"image_path":"/workspace/test-images/cat1.png","question":"Describe this image."}'
+```
+
+See [docs/VISION.md](docs/VISION.md) for supported formats, access limits, and
+image data handling.
 
 ## Agent modes
 
@@ -74,15 +89,15 @@ variables documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Documentation
 
-| Guide | Use it for |
-| --- | --- |
-| [QUICKSTART.md](QUICKSTART.md) | Setup, everyday commands, smoke test, evaluation, and troubleshooting |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Environment variables and model/VRAM guidance |
-| [docs/RAG.md](docs/RAG.md) | Indexing, retrieval behavior, and RAG settings |
-| [docs/VISION.md](docs/VISION.md) | Local image question answering and access limits |
-| [PROJECTS.md](PROJECTS.md) | Enabling read-only access to external project directories |
-| [AGENTS.md](AGENTS.md) | Repository layout, development commands, and contributor constraints |
-| [workspace/README.md](workspace/README.md) | Agent workspace and sandbox |
+| Guide                                         | Use it for                                                            |
+| --------------------------------------------- | --------------------------------------------------------------------- |
+| [QUICKSTART.md](QUICKSTART.md)                 | Setup, everyday commands, smoke test, evaluation, and troubleshooting |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Environment variables and model/VRAM guidance                         |
+| [docs/RAG.md](docs/RAG.md)                     | Indexing, retrieval behavior, and RAG settings                        |
+| [docs/VISION.md](docs/VISION.md)               | Local image question answering and access limits                      |
+| [PROJECTS.md](PROJECTS.md)                     | Enabling read-only access to external project directories             |
+| [AGENTS.md](AGENTS.md)                         | Repository layout, development commands, and contributor constraints  |
+| [workspace/README.md](workspace/README.md)     | Agent workspace and sandbox                                           |
 
 ## Development checks
 
