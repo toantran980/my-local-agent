@@ -5,7 +5,7 @@ SHELL := /bin/bash
 ROOT := $(shell pwd)
 MY_LOCAL_AGENT_ROOT ?= $(ROOT)
 
-.PHONY: up down build restart logs test eval eval-tool-use cron cron-install logs-ollama logs-mcpo logs-webui clean
+.PHONY: up down build restart logs test eval eval-tool-use eval-vision cron cron-install logs-ollama logs-mcpo logs-webui clean
 
 # ── Core stack ──────────────────────────────────────────────────
 up:
@@ -54,6 +54,9 @@ eval-rag:
 
 eval-tool-use:
 	wsl bash -lc 'cd "$${MY_LOCAL_AGENT_ROOT:-$(ROOT)}" && python3 scripts/eval-tool-use.py'
+
+eval-vision:
+	wsl bash -lc 'cd "$${MY_LOCAL_AGENT_ROOT:-$(ROOT)}" && python3 scripts/eval-vision.py'
 
 # ── Cron / nightly ──────────────────────────────────────────────
 cron-install:
@@ -119,6 +122,7 @@ help:
 	@echo "  make eval         - Run eval suite + summary"
 	@echo "  make eval-history - Show eval history trend"
 	@echo "  make eval-rag     - Retrieval hit-rate eval (needs nomic-embed-text)"
+	@echo "  make eval-vision  - OCR, chart, and object vision eval"
 	@echo ""
 	@echo "Cron / Nightly:"
 	@echo "  make cron-install - Install 5 PM cron"

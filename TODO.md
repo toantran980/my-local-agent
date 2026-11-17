@@ -4,10 +4,9 @@ Next steps, best fit first. Check items off as they land.
 
 ## Topic coverage
 
-- [x] **vision (biggest gap)**: `mcp/vision_ops.py` MCP server with a multimodal
+- [X] **vision (biggest gap)**: `mcp/vision_ops.py` MCP server with a multimodal
   Ollama model for read-only image question answering. See `docs/VISION.md`.
-  - [ ] Add a small, non-sensitive image evaluation set for OCR, charts, and object questions.
-  - [ ] Compare `qwen2.5vl:7b` with `qwen3-vl:8b` for answer quality, latency, and VRAM; update the default only if results justify it.
+  - [x] Add a small, non-sensitive image evaluation set for OCR, charts, and object questions.
 - [ ] **speech**: Whisper (`faster-whisper`) voice input and Piper voice output.
   - [ ] Add a local audio transcription tool with supported-format, file-size, and workspace-path limits.
   - [ ] Add optional local text-to-speech that writes output only under the workspace.
@@ -25,7 +24,7 @@ Next steps, best fit first. Check items off as they land.
 
 ## Housekeeping
 
-- [x] Check `PROJECTS.md` and `docs/` for stale references.
+- [X] Check `PROJECTS.md` and `docs/` for stale references.
 - [ ] Run the reflection and planner paths against a live model on more than one prompt.
 
 ## What next

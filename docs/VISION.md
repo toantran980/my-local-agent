@@ -34,3 +34,27 @@ The answer depends on the selected model and image quality. Do not rely on it
 for safety-critical interpretation, exact OCR, or guaranteed object detection.
 Review the model output before acting on it. Keep the image directories mounted
 as narrowly as possible.
+
+## Evaluation
+
+`eval/vision/` contains three generated, non-sensitive PNG fixtures covering
+receipt OCR, a labeled bar chart, and colored-shape counting. Regenerate them
+with the standard library:
+
+```bash
+python3 eval/vision/generate_fixtures.py
+```
+
+Run the local model against the cases with:
+
+```bash
+python3 scripts/eval-vision.py
+# or: make eval-vision
+```
+
+The evaluator checks expected answer facts with simple keyword matching; it is
+a quick regression signal, not a full measure of image understanding. It uses
+`VISION_MODEL` (default `qwen2.5vl:7b`) and `OLLAMA_URL` (default
+`http://localhost:11434`) and exits nonzero if any case errors or the default
+100% threshold is missed. Override the threshold with `--threshold`, for
+example `python3 scripts/eval-vision.py --threshold 0.67`.

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "ocr-receipt",
+    "category": "ocr",
+    "image": "images/ocr-receipt.png",
+    "question": "Read the receipt number and the total amount.",
+    "expected_groups": [["817"], ["18.75"]]
+  },
+  {
+    "id": "bar-chart",
+    "category": "chart",
+    "image": "images/bar-chart.png",
+    "question": "Which category has the most units sold, and how many?",
+    "expected_groups": [["B"], ["6", "six"]]
+  },
+  {
+    "id": "colored-shapes",
+    "category": "objects",
+    "image": "images/objects.png",
+    "question": "How many red circles are shown?",
+    "expected_groups": [["3", "three"]]
+  }
+]
